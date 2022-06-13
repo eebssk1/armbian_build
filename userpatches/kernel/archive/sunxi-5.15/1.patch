@@ -1,0 +1,11 @@
+--- a/Makefile	2022-06-13 00:11:29.090936782 +0000
++++ b/Makefile	2022-06-13 04:29:28.531527431 +0000
+@@ -769,6 +769,8 @@
+ KBUILD_CFLAGS	+= $(call cc-option,-fno-allow-store-data-races)
+ endif
+ 
++KBUILD_CFLAGS   += -mcpu=cortex-a53 -fipa-pta -flimit-function-alignment -fschedule-insns -fsched-spec-load -fsched-stalled-insns=2 --param=predictable-branch-outcome=6 --param=max-crossjump-edges=160 --param=max-delay-slot-insn-search=132 --param=max-gcse-insertion-ratio=22 --param=max-pending-list-length=36 --param=max-inline-insns-auto=40  --param=inline-min-speedup=12 --param=large-function-growth=112 --param=inline-unit-growth=46 --param=max-inline-insns-recursive=500 --param=max-inline-insns-recursive-auto=500 --param=max-inline-recursive-depth-auto=10 --param=max-inline-recursive-depth=10 --param=gcse-cost-distance-ratio=12 --param=max-hoist-depth=50 --param=max-tail-merge-comparisons=12 --param=max-tail-merge-iterations=4 --param=max-stores-to-merge=80 --param=avg-loop-niter=12 --param=dse-max-object-size=274 --param=max-reload-search-insns=132 --param=max-sched-ready-insns=160 --param sched-autopref-queue-depth=2 --param uninit-control-dep-attempts=1280 --param max-slsr-cand-scan=76 --param sched-pressure-algorithm=2 -fgraphite -fgraphite-identity
++
+ ifdef CONFIG_READABLE_ASM
+ # Disable optimizations that make assembler listings hard to read.
+ # reorder blocks reorders the control in the function

@@ -1,0 +1,10 @@
+--- a/init/Kconfig	2022-06-12 21:47:51.152867960 +0000
++++ b/init/Kconfig	2022-06-13 04:34:38.357489207 +0000
+@@ -1365,7 +1365,6 @@
+ 
+ config CC_OPTIMIZE_FOR_PERFORMANCE_O3
+ 	bool "Optimize more for performance (-O3)"
+-	depends on ARC
+ 	help
+ 	  Choosing this option will pass "-O3" to your compiler to optimize
+ 	  the kernel yet more for performance.
