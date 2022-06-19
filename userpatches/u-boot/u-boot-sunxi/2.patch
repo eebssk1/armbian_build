@@ -1,0 +1,11 @@
+--- a/arch/arm/config.mk	2022-06-19 21:17:43.327651069 +0000
++++ b/arch/arm/config.mk	2022-06-19 21:17:36.979639065 +0000
+@@ -16,7 +16,7 @@
+ CFLAGS_EFI := -fpic -fshort-wchar
+ 
+ ifneq ($(CONFIG_LTO)$(CONFIG_USE_PRIVATE_LIBGCC),yy)
+-LDFLAGS_FINAL += --gc-sections
++LDFLAGS_FINAL += --gc-sections --relax -O2
+ endif
+ 
+ ifndef CONFIG_LTO

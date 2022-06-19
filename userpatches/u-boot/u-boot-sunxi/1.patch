@@ -1,0 +1,20 @@
+--- a/Makefile	2022-06-19 18:10:01.968462871 +0000
++++ b/Makefile	2022-06-19 21:15:56.015448147 +0000
+@@ -707,7 +707,7 @@
+ endif
+ 
+ ifeq ($(CONFIG_STACKPROTECTOR),y)
+-KBUILD_CFLAGS += $(call cc-option,-fstack-protector-strong)
++KBUILD_CFLAGS += $(call cc-option,-fstack-protector)
+ CFLAGS_EFI += $(call cc-option,-fno-stack-protector)
+ else
+ KBUILD_CFLAGS += $(call cc-option,-fno-stack-protector)
+@@ -773,7 +773,7 @@
+ # Add user supplied CPPFLAGS, AFLAGS and CFLAGS as the last assignments
+ KBUILD_CPPFLAGS += $(KCPPFLAGS)
+ KBUILD_AFLAGS += $(KAFLAGS)
+-KBUILD_CFLAGS += $(KCFLAGS)
++KBUILD_CFLAGS += $(KCFLAGS) -mcpu=cortex-a53 -fgraphite
+ 
+ KBUILD_HOSTCFLAGS += $(if $(CONFIG_TOOLS_DEBUG),-g)
+ 
