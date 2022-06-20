@@ -443,7 +443,7 @@ prepare_partitions()
 	# create bigger number for desktop builds
 	if [[ $BUILD_DESKTOP == yes ]]; then local node_number=4096; else local node_number=1024; fi
 	if [[ $HOSTRELEASE =~ buster|bullseye|focal|jammy|sid ]]; then
-		mkopts[ext4]="-q -m 2 -O ^64bit,^metadata_csum -N $((128*${node_number}))"
+		mkopts[ext4]="-q -m 1 -O ^64bit,^metadata_csum,dir_index,ext_attr,extent,filetype,flex_bg,sparse_super -N $((128*${node_number})) -J size=54"
 	fi
 	mkopts[fat]='-n BOOT'
 	mkopts[ext2]='-q'
