@@ -193,7 +193,7 @@ install_common()
 		fi
 	else
 
-		if [[ "${BOOTCONFIG}" != "none" ]]; then
+		if [[ -n "${BOOTSCRIPT}" ]]; then
 			if [ -f "${USERPATCHES_PATH}/bootscripts/${bootscript_src}" ]; then
 				cp "${USERPATCHES_PATH}/bootscripts/${bootscript_src}" "${SDCARD}/boot/${bootscript_dst}"
 			else
@@ -338,7 +338,7 @@ POST_INSTALL_KERNEL_DEBS
 
 	# install board support packages
 	if [[ "${REPOSITORY_INSTALL}" != *bsp* ]]; then
-		install_deb_chroot "${DEB_STORAGE}/${BSP_CLI_PACKAGE_FULLNAME}.deb" | tee "${DEST}"/${LOG_SUBPATH}/install.log 2>&1
+		install_deb_chroot "${DEB_STORAGE}/${BSP_CLI_PACKAGE_FULLNAME}.deb" | tee -a "${DEST}"/${LOG_SUBPATH}/install.log 2>&1
 	else
 		install_deb_chroot "${CHOSEN_ROOTFS}" "remote"
 	fi
