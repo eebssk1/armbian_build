@@ -32,25 +32,21 @@ case $BRANCH in
 		KERNELBRANCH="branch:linux-5.10.y"
 		KERNELPATCHDIR='meson-'$BRANCH
 
-		BUILD_DESKTOP=no
+    ;;
 
-        ;;
 	current)
 
 		KERNELBRANCH="branch:linux-5.15.y"
 		KERNELPATCHDIR='meson-'$BRANCH
 
-		BUILD_DESKTOP=no
+	  ;;
 
-	;;
 	edge)
 
-		KERNELDIR='linux-meson'
-		KERNELSOURCE='https://github.com/xdarklight/linux'
-		KERNELBRANCH="branch:meson-mx-integration-5.18-20220516"
+		KERNELBRANCH="branch:linux-5.18.y"
 		KERNELPATCHDIR='meson-'$BRANCH
 
-	;;
+	  ;;
 esac
 
 write_uboot_platform()
