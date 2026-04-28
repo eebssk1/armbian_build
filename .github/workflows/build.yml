@@ -1,0 +1,60 @@
+name: own build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/eebssk1/debian-trixie:latest
+      volumes:
+        - /root:/user
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v6
+      - name: Clean UP
+        run: exec ./cleanga.sh
+      - name: Get CC toolchain
+        run: |
+          cd $HOME
+          curl -L 'https://github.com/eebssk1/aio_tc_build/releases/latest/download/aarch64-linux-gnu-cross.tb2' | tar --bz -x
+      - name: Build
+        run: |
+          echo VER=$(cat VERSION) >> $GITHUB_ENV
+          export PATH=$HOME/aarch64-linux-gnu/bin:$PWD/fake:$PATH
+          hash -r
+          export KERNEL_EXTRA_CFLAGS='-fipa-pta -D__1ENABLE_AGGRESSIVE_GRAPHITE9__ -falign-jumps=8:5:2 -falign-loops=8:5:2'
+          ./compile.sh BOARD=orangepi5pro BRANCH=edge BUILD_DESKTOP=no BUILD_MINIMAL=yes EXPERT=yes RELEASE=trixie NETWORKING_STACK=network-manager ATF_COMPILE=yes ARTIFACT_IGNORE_CACHE="yes" DOWNLOAD_MIRROR="china" NAMESERVER="223.5.5.5" KERNEL_KEEP_CONFIG=yes CLEAN_LEVEL="make,images,alldebs,oldcache" KERNEL_CONFIGURE=no
+      - name: commit compare
+        id: cc
+        continue-on-error: true
+        run: |
+          set +e
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git fetch --prune --tags
+          PSHA=$(git rev-list -n 1 "${{ env.VER }}")
+          if [ "$PSHA" = "" ]; then
+            exit 0
+          fi
+          if [ "$PSHA" != "$GITHUB_SHA" ]; then
+            echo "build on different commit, release tag may need purge"
+            echo NEEDDEL=1 >> $GITHUB_OUTPUT
+          fi
+          exit 0
+      - name: delete tag if exists
+        uses: ClementTsang/delete-tag-and-release@v0.4.0
+        if: steps.cc.outputs.NEEDDEL == '1'
+        continue-on-error: true
+        with:
+          delete_release: true
+          tag_name: ${{ env.VER }}
+      - name: release
+        uses: ncipollo/release-action@v1.16.0
+        with:
+          allowUpdates: true
+          artifacts: "output/debs/*.deb,output/images/*"
+          makeLatest: true
+          omitBodyDuringUpdate: true
+          tag: ${{ env.VER }}
+          
