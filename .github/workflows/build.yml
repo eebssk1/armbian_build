@@ -6,15 +6,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/eebssk1/debian-trixie:latest
-      volumes:
-        - /root:/user
-      options: --privileged --user 1001
     steps:
       - uses: actions/checkout@v6
       - name: Clean UP
-        run: exec ./cleanga.sh
+        run: sudo ./cleanga.sh
       - name: Get CC toolchain
         run: |
           cd $HOME
@@ -25,7 +20,7 @@ jobs:
           export PATH=$HOME/aarch64-linux-gnu/bin:$PWD/fake:$PATH
           hash -r
           export KERNEL_EXTRA_CFLAGS='-fipa-pta -D__1ENABLE_AGGRESSIVE_GRAPHITE9__ -falign-jumps=8:5:2 -falign-loops=8:5:2'
-          ./compile.sh BOARD=orangepi5pro BRANCH=edge BUILD_DESKTOP=no BUILD_MINIMAL=yes EXPERT=yes RELEASE=trixie NETWORKING_STACK=network-manager ATF_COMPILE=yes ARTIFACT_IGNORE_CACHE="yes" DOWNLOAD_MIRROR="china" NAMESERVER="223.5.5.5" KERNEL_KEEP_CONFIG=yes CLEAN_LEVEL="make,images,alldebs,oldcache" KERNEL_CONFIGURE=no
+          ./compile.sh PREFER_DOCKER=no BOARD=orangepi5pro BRANCH=edge BUILD_DESKTOP=no BUILD_MINIMAL=yes EXPERT=yes RELEASE=trixie NETWORKING_STACK=network-manager ATF_COMPILE=yes ARTIFACT_IGNORE_CACHE="yes" DOWNLOAD_MIRROR="china" NAMESERVER="223.5.5.5" KERNEL_KEEP_CONFIG=yes CLEAN_LEVEL="make,images,alldebs,oldcache" KERNEL_CONFIGURE=no
       - name: commit compare
         id: cc
         continue-on-error: true
@@ -57,4 +52,3 @@ jobs:
           makeLatest: true
           omitBodyDuringUpdate: true
           tag: ${{ env.VER }}
-          
