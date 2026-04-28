@@ -150,7 +150,7 @@ function armbian_kernel_config__600_enable_ebpf_and_btf_info() {
 			"BPF_JIT_ALWAYS_ON"                      # Always compile BPF with JIT
 			"BPF_LSM"                                # BPF Linux Security Module support
 			"BPF_STREAM_PARSER"                      # BPF stream parser support
-			"CGROUP_FAVOR_DYNMODS"                   # Favor dynamic modifications for cgroups
+			#"CGROUP_FAVOR_DYNMODS"                   # Favor dynamic modifications for cgroups
 			"CGROUP_MISC"                            # Miscellaneous cgroup support
 			"DYNAMIC_FTRACE"                         # Dynamic ftrace support
 			"FTRACE"                                 # Ftrace (function tracer) support
