@@ -10,7 +10,7 @@ jobs:
       image: ghcr.io/eebssk1/debian-trixie:latest
       volumes:
         - /root:/user
-      options: --privileged
+      options: --privileged --user 1001
     steps:
       - uses: actions/checkout@v6
       - name: Clean UP
