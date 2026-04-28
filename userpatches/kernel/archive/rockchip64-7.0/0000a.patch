@@ -1,0 +1,42 @@
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c	2026-03-23 18:35:42.450206814 +0000
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c	2026-03-24 16:06:13.942810424 +0000
+@@ -221,16 +221,16 @@
+ 	.alpha2 =  "99",
+ 	.reg_rules = {
+ 		/* IEEE 802.11b/g, channels 1..11 */
+-		REG_RULE(2412-10, 2472+10, 40, 6, 20, 0),
++		REG_RULE(2412-10, 2472+10, 40, 6, 30, 0),
+ 		/* If any */
+ 		/* IEEE 802.11 channel 14 - Only JP enables
+ 		 * this and for 802.11b only
+ 		 */
+-		REG_RULE(2484-10, 2484+10, 20, 6, 20, 0),
++		REG_RULE(2484-10, 2484+10, 20, 6, 30, 0),
+ 		/* IEEE 802.11a, channel 36..64 */
+-		REG_RULE(5150-10, 5350+10, 160, 6, 20, 0),
++		REG_RULE(5150-10, 5350+10, 160, 6, 30, NL80211_RRF_AUTO_BW),
+ 		/* IEEE 802.11a, channel 100..165 */
+-		REG_RULE(5470-10, 5850+10, 160, 6, 20, 0), }
++		REG_RULE(5470-10, 5850+10, 160, 6, 30, NL80211_RRF_AUTO_BW), }
+ };
+ 
+ /* Note: brcmf_cipher_suites is an array of int defining which cipher suites
+@@ -8265,6 +8265,8 @@
+ 		return;
+ 	}
+ 
++	printk("Firmware current CCode is %c%c\n", ccreq.country_abbrev[0], ccreq.country_abbrev[1]);
++
+ 	err = brcmf_translate_country_code(ifp->drvr, req->alpha2, &ccreq);
+ 	if (err)
+ 		return;
+@@ -8274,6 +8276,9 @@
+ 		bphy_err(drvr, "Firmware rejected country setting\n");
+ 		return;
+ 	}
++
++	printk("Firmware changed  CCode to %c%c\n", ccreq.country_abbrev[0], ccreq.country_abbrev[1]);
++
+ 	brcmf_setup_wiphybands(cfg);
+ }
+ 

@@ -1,0 +1,60 @@
+--- a/net/wireless/reg.c	2026-04-03 16:06:32.924036663 +0800
++++ b/net/wireless/reg.c	2026-04-06 01:14:18.763776339 +0800
+@@ -3941,6 +3941,7 @@
+ 	struct regulatory_request *lr;
+ 	bool user_reset = false;
+ 	int r;
++	char *s,*ss;
+ 
+ 	if (IS_ERR_OR_NULL(rd))
+ 		return -ENODATA;
+@@ -3955,27 +3956,49 @@
+ 
+ 	lr = get_last_request();
+ 
++	ss = "Unkown";
++
++	switch(regd_src) {
++		case REGD_SOURCE_INTERNAL_DB:
++			ss = "SOURCE_INTERNAL_DB";
++			break;
++		case REGD_SOURCE_CRDA:
++			ss = "SOURCE_CRDA";
++			break;
++		case REGD_SOURCE_CACHED:
++			ss = "SOURCE_CACHED";
++			break;
++		default:
++			break;
++	}
++
+ 	/* Note that this doesn't update the wiphys, this is done below */
++	s = "Unknown";
+ 	switch (lr->initiator) {
+ 	case NL80211_REGDOM_SET_BY_CORE:
+ 		r = reg_set_rd_core(rd);
++		s = "Core";
+ 		break;
+ 	case NL80211_REGDOM_SET_BY_USER:
+ 		cfg80211_save_user_regdom(rd);
+ 		r = reg_set_rd_user(rd, lr);
+ 		user_reset = true;
++		s = "User";
+ 		break;
+ 	case NL80211_REGDOM_SET_BY_DRIVER:
+ 		r = reg_set_rd_driver(rd, lr);
++		s = "Driver";
+ 		break;
+ 	case NL80211_REGDOM_SET_BY_COUNTRY_IE:
+ 		r = reg_set_rd_country_ie(rd, lr);
++		s = "CountryIE";
+ 		break;
+ 	default:
+ 		WARN(1, "invalid initiator %d\n", lr->initiator);
+ 		kfree(rd);
+ 		return -EINVAL;
+ 	}
++	printk("Request regdom change  mode = %s  where = %s.\n",s,ss);
+ 
+ 	if (r) {
+ 		switch (r) {

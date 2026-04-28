@@ -1,0 +1,23 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arjan van de Ven <arjan.van.de.ven@intel.com>
+Date: Tue, 23 Nov 2021 17:38:50 +0000
+Subject: [PATCH] add a per cpu minimum high watermark an tune batch size
+
+make sure there's at least 1024 per cpu pages... a reasonably small
+amount for todays system
+---
+ mm/page_alloc.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/mm/page_alloc.c b/mm/page_alloc.c
+index e6f211dcf82e..0ea48434ac7d 100644
+--- a/mm/page_alloc.c
++++ b/mm/page_alloc.c
+@@ -5606,6 +5607,6 @@
+ 	 * size is striking a balance between allocation latency
+ 	 * and zone lock contention.
+ 	 */
+-	batch = min(zone_managed_pages(zone) >> 12, SZ_256K / PAGE_SIZE);
++	batch = min(zone_managed_pages(zone) >> 11, SZ_512K / PAGE_SIZE);
+ 	if (batch <= 1)
+ 		return 1;

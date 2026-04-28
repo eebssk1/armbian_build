@@ -1,0 +1,21 @@
+#!/bin/sh
+PREREQ=""
+prereqs()
+{
+    echo "$PREREQ"
+}
+case $1 in
+prereqs)
+    prereqs
+    exit 0
+    ;;
+esac
+
+. /scripts/functions || true
+
+sleep 1
+log_begin_msg "Rescanning PCIe bus ..."
+echo 1 > /sys/bus/pci/rescan
+# Give it a moment to wake up
+sleep 1
+log_end_msg
