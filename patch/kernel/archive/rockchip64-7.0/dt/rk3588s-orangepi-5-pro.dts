@@ -120,9 +120,9 @@
 		compatible = "pwm-fan";
 		#cooling-cells = <2>;
 		/* Extend SBC capacitors and CPU lifetime */
-		cooling-levels = <160 190 215 235 255>;
+		cooling-levels = <0 140 170 210 255>;
 		fan-supply = <&vcc5v0_sys>;
-		pwms = <&pwm2 0 20000000 0>;
+		pwms = <&pwm2 0 50000 0>;
 	};
 
 	/* PCIe 2.0 Regulator for MT YT6801 (PCIE-to-Ethernet) */
