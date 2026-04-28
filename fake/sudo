@@ -1,0 +1,18 @@
+#!/bin/bash
+# Separate sudo flags from the command
+args=()
+cmd_found=0
+for arg in "$@"; do
+    if [[ "$cmd_found" -eq 0 && "$arg" == -* ]]; then
+        args+=("$arg") # It's a flag for sudo
+    else
+        if [[ "$cmd_found" -eq 0 ]]; then
+            # First non-flag is the command. Inject 'env' here.
+            args+=("/usr/bin/env" "PATH=$PATH:/sbin:/usr/sbin:/usr/local/sbin")
+            cmd_found=1
+        fi
+        args+=("$arg")
+    fi
+done
+
+exec /usr/bin/sudo "${args[@]}"
