@@ -38,7 +38,9 @@ function prepare_partitions() {
 	parttype[xfs]=xfs
 	# parttype[nfs] is empty
 
-	mkopts[ext4]="-q -m 2" # for a long time we had '-O ^64bit,^metadata_csum' here
+	mkextra4="-J size=36,fast_commit_size=192 -G 8 -E packed_meta_blocks=1"
+
+	mkopts[ext4]="-q -m 2 $mkextra4" # for a long time we had '-O ^64bit,^metadata_csum' here
 	# Hack: newer versions of e2fsprogs in combination with recent kernels enable orphan_file (FEATURE_C12) by default; that can't be handled by older versions of e2fsprogs
 	#       at the same time, older versions don't know about orphan_file at all, so we can't simply disable for all.
 	# run & parse the version of e2fsprogs to determine if we need to disable orphan_file
@@ -47,7 +49,7 @@ function prepare_partitions() {
 	# use linux-version compare to check if the version is at least 1.47
 	if linux-version compare "${e2fsprogs_version}" ge "1.47"; then
 		display_alert "e2fsprogs version" "$e2fsprogs_version supports orphan_file" "info"
-		mkopts[ext4]="-q -m 2 -O ^orphan_file"
+		mkopts[ext4]="-q -m 2 -O ^orphan_file $mkextra4"
 	else
 		display_alert "e2fsprogs version" "$e2fsprogs_version does not support orphan_file" "info"
 	fi
@@ -78,7 +80,7 @@ function prepare_partitions() {
 	mkfs[xfs]=xfs
 	# mkfs[nfs] is empty
 
-	mountopts[ext4]=',commit=120,errors=remount-ro' # EXT4 default: 5 (https://www.man7.org/linux/man-pages/man5/ext4.5.html)
+	mountopts[ext4]=',commit=45,errors=remount-ro,max_batch_time=19200,min_batch_time=480,nombcache' # EXT4 default: 5 (https://www.man7.org/linux/man-pages/man5/ext4.5.html)
 	# mountopts[ext2] is empty
 	# mountopts[fat] is empty
 	# mountopts[f2fs] is empty
