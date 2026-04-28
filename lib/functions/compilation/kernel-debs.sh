@@ -550,7 +550,10 @@ function kernel_package_callback_linux_headers() {
 	kernel_package_hook_helper "postinst" <(
 		cat <<- EOT_POSTINST
 			cd "/usr/src/linux-headers-${kernel_version_family}"
-			NCPU=\$(grep -c 'processor' /proc/cpuinfo)
+			NCPU=\$(nproc)
+			if [ "$NCPU" = "" ]; then
+				NCPU=\$(grep -c 'processor' /proc/cpuinfo)
+			fi
 			echo "Configuring kernel-headers (${kernel_version_family}) - please wait ..."
 			make ARCH="${SRC_ARCH}" olddefconfig
 
