@@ -23,13 +23,13 @@ ENABLED=true
 
 # Which algorithm for zram based swapping. Seems lzo is best choice on ARM:
 # https://forum.armbian.com/topic/8161-swap-on-sbc/?do=findComment&comment=61668
-# SWAP_ALGORITHM=lzo
+# SWAP_ALGORITHM=kernel_default|lzo
 
 # Which algorithm to choose for zram based ramlog partition
-# RAMLOG_ALGORITHM=zstd
+# RAMLOG_ALGORITHM=SWAP_ALGORITHM
 
 # Which algorithm to choose for zram based /tmp
-# TMP_ALGORITHM=zstd
+# TMP_ALGORITHM=SWAP_ALGORITHM
 
 # Size for zram based /tmp, total memory / 2 by default
 # TMP_SIZE=500M

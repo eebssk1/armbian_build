@@ -46,7 +46,11 @@ activate_zram() {
 	module_args="$(modinfo zram | awk -F" " '/num_devices/ {print $2}' | cut -f1 -d:)"
 	[[ -n ${module_args} ]] && modprobe zram ${module_args}=$(( zram_devices + 2 )) || return
 
-	swap_algo=${SWAP_ALGORITHM:=lzo}
+	default_algo="$(cat /sys/block/zram0/comp_algorithm)"
+	if [ "x$default_algo" = "x" ]; then
+		default_algo=lzo
+	fi
+	swap_algo=${SWAP_ALGORITHM:=$default_algo}
 	# Expose 50% of real memory as swap space by default
 	zram_percent=${ZRAM_PERCENTAGE:=50}
 	mem_info=$(LC_ALL=C free -w 2>/dev/null | grep "^Mem" || LC_ALL=C free | grep "^Mem")
@@ -113,12 +117,12 @@ activate_ramlog_partition() {
 	# choose RAMLOG_ALGORITHM if defined in /etc/default/armbian-zram-config
 	# otherwise try to choose most efficient compression scheme available.
 	# See https://patchwork.kernel.org/patch/9918897/
-	if [ "X${RAMLOG_ALGORITHM}" = "X" ]; then
+	if [ "X${RAMLOG_ALGORITHM}" = "Xauto" ]; then
 		for algo in lz4 lz4hc quicklz zlib brotli zstd ; do
 			echo ${algo} >/sys/block/${log_device}/comp_algorithm 2>/dev/null
 		done
 	else
-		echo ${RAMLOG_ALGORITHM} >/sys/block/${log_device}/comp_algorithm 2>/dev/null
+		echo ${RAMLOG_ALGORITHM:-$swap_algo} >/sys/block/${log_device}/comp_algorithm 2>/dev/null
 	fi
 	echo -n ${disksize} > /sys/block/${log_device}/disksize
 
@@ -129,9 +133,9 @@ activate_ramlog_partition() {
 	fi
 
 	if dpkg --compare-versions "$MKFS_VERSION" gt "2.40.1"; then
-		mkfs.ext4 -O ^has_journal -L log2ram /dev/${log_device}
+		mkfs.ext4 -O ^has_journal -G 16 -E packed_meta_blocks=1 -L log2ram /dev/${log_device}
 	else
-		mkfs.ext4 -O ^has_journal -s 1024 -L log2ram /dev/${log_device}
+		mkfs.ext4 -O ^has_journal -G 16 -E packed_meta_blocks=1 -s 1024 -L log2ram /dev/${log_device}
 	fi
 
 	algo=$(sed 's/.*\[\([^]]*\)\].*/\1/g' </sys/block/${log_device}/comp_algorithm)
@@ -153,9 +157,9 @@ activate_compressed_tmp() {
 	fi
 	[[ -z ${TMP_SIZE} ]] && echo -n $(( memory_total / 2 )) > /sys/block/${tmp_device}/disksize || echo -n ${TMP_SIZE} > /sys/block/${tmp_device}/disksize
 	if dpkg --compare-versions "$MKFS_VERSION" gt "2.40.1"; then
-		mkfs.ext4 -O ^has_journal -L tmp /dev/${tmp_device}
+		mkfs.ext4 -O ^has_journal -G 16 -E packed_meta_blocks=1 -L tmp /dev/${tmp_device}
 	else
-		mkfs.ext4 -O ^has_journal -s 1024 -L tmp /dev/${tmp_device}
+		mkfs.ext4 -O ^has_journal -G 16 -E packed_meta_blocks=1 -s 1024 -L tmp /dev/${tmp_device}
 	fi
 
 	mount -o nosuid,discard /dev/${tmp_device} /tmp
