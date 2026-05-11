@@ -205,8 +205,7 @@ runs:
           BUILD_DESKTOP="yes"
           BUILD_MINIMAL="no"
           DESKTOP_ENVIRONMENT="${{ inputs.armbian_ui }}"
-          DESKTOP_APPGROUPS_SELECTED=""
-          DESKTOP_ENVIRONMENT_CONFIG_NAME="config_base"
+          DESKTOP_TIER="mid"
         fi
 
         # go to build folder
@@ -226,8 +225,7 @@ runs:
         BUILD_DESKTOP="${BUILD_DESKTOP}" \
         BUILD_MINIMAL="${BUILD_MINIMAL}" \
         DESKTOP_ENVIRONMENT="${DESKTOP_ENVIRONMENT}" \
-        DESKTOP_APPGROUPS_SELECTED="${DESKTOP_APPGROUPS_SELECTED}" \
-        DESKTOP_ENVIRONMENT_CONFIG_NAME="${DESKTOP_ENVIRONMENT_CONFIG_NAME}" \
+        DESKTOP_TIER="${DESKTOP_TIER}" \
         ENABLE_EXTENSIONS="${{ inputs.armbian_extensions }}" \
         COMPRESS_OUTPUTIMAGE="${{ inputs.armbian_compress }}" \
         SHARE_LOG="yes" \
@@ -399,12 +397,16 @@ runs:
 
         # ── URL composition ──────────────────────────────────────────────────
         def signature_urls(base):
-            """Return (base, base.asc, base.sha, base.torrent)."""
-            return base, f"{base}.asc", f"{base}.sha", f"{base}.torrent"
+            """Return (base, base.asc, base.sha, ""). The build never
+            produces a .torrent for the assets it ships, so the torrent
+            slot is always empty — the field is kept for schema parity
+            with the canonical armbian-images.json index.
+            """
+            return base, f"{base}.asc", f"{base}.sha", ""
 
         def build_urls(parsed, image_format, img_name):
-            """Compose file_url + redi_url (each with its .asc/.sha/.torrent
-            siblings).
+            """Compose file_url + redi_url (each with its .asc/.sha
+            siblings; torrent slot is always empty — see signature_urls).
 
             Two URL shapes, selected by DOWNLOAD_REPO:
               non-empty -> {base}/{board}/{repo}/{filename}    dl.armbian.com style
