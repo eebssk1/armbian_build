@@ -23,6 +23,6 @@ ip link set dev $DEVICE_IP_IFACE mode default
 ip link set dev $DEVICE_IP_IFACE qlen 3200
 #tc qdisc replace dev $DEVICE_IP_IFACE root fq_pie noecn
 
-tc qdisc replace dev $DEVICE_IP_IFACE root handle 1: fq_pie ecn dq_rate_estimator
+tc qdisc replace dev $DEVICE_IP_IFACE root handle 1: sfq
 
 exit 0

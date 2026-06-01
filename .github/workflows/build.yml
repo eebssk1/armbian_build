@@ -25,7 +25,7 @@ jobs:
           export CCACHE_SLOPPINESS="locale,time_macros,include_file_mtime,file_stat_matches"
           export CCACHE_COMPRESSLEVEL=2
           hash -r
-          export KERNEL_EXTRA_CFLAGS='-fipa-pta -D__1ENABLE_AGGRESSIVE_GRAPHITE9__ -falign-jumps=8:5:2 -falign-loops=8:5:2'
+          export KERNEL_EXTRA_CFLAGS='-fipa-pta -D__1ENABLE_AGGRESSIVE_GRAPHITE9__ -falign-jumps=4 -falign-loops=4'
           ./compile.sh PREFER_DOCKER=no USE_CCACHE=yes BOARD=orangepi5pro BRANCH=edge BUILD_DESKTOP=no BUILD_MINIMAL=yes EXPERT=yes RELEASE=trixie NETWORKING_STACK=network-manager ATF_COMPILE=yes ARTIFACT_IGNORE_CACHE="yes" DOWNLOAD_MIRROR="china" NAMESERVER="223.5.5.5" KERNEL_KEEP_CONFIG=yes CLEAN_LEVEL="make,images,alldebs,oldcache" KERNEL_CONFIGURE=no
       - name: commit compare
         id: cc
