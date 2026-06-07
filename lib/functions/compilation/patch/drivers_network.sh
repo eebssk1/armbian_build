@@ -933,3 +933,4 @@ driver_rtl8152_rtl8153() {
 			"$kerneldir/drivers/net/usb/"
 	fi
 }
+
