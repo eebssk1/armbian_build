@@ -80,7 +80,7 @@ function prepare_partitions() {
 	mkfs[xfs]=xfs
 	# mkfs[nfs] is empty
 
-	mountopts[ext4]=',commit=45,errors=remount-ro,max_batch_time=19200,min_batch_time=480,nombcache' # EXT4 default: 5 (https://www.man7.org/linux/man-pages/man5/ext4.5.html)
+	mountopts[ext4]=',commit=45,errors=remount-ro,max_batch_time=19200,min_batch_time=480' # EXT4 default: 5 (https://www.man7.org/linux/man-pages/man5/ext4.5.html)
 	# mountopts[ext2] is empty
 	# mountopts[fat] is empty
 	# mountopts[f2fs] is empty
