@@ -36,6 +36,10 @@ Main() {
 	if [ ! -e /etc/sysctl.d/99-sysctl.conf ]; then
 		touch /etc/sysctl.d/99-sysctl.conf
 	fi
+	if [ -e /etc/sysctl.conf ]; then
+		cat /etc/sysctl.conf >> /etc/sysctl.d/99-sysctl.conf
+	fi
+	rm /etc/sysctl.conf
 	ln -s /etc/sysctl.d/99-sysctl.conf /etc/sysctl.conf
 	case $RELEASE in
 		stretch)
