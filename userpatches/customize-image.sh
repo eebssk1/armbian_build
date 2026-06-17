@@ -20,7 +20,8 @@ BUILD_DESKTOP=$4
 Main() {
 	apt update
 	apt-get install -y wireless-tools util-linux-extra linux-cpupower lm-sensors file locate \
-		ack python-is-python3 apt-utils dialog bash-completion tmux polkitd pkexec libncurses6 libncursesw6 pciutils
+		ack python-is-python3 apt-utils dialog bash-completion tmux polkitd pkexec libncurses6 libncursesw6 pciutils \
+		dbus libgl1-mesa-dri mesa-vulkan-drivers libgbm1 mesa-utils-extra vulkan-tools
 	apt-get install -y --no-install-recommends linux-libc-dev libc6-dev
 	apt-get purge -y chrony netplan.io
 	apt-get install -y systemd-timesyncd
@@ -41,6 +42,7 @@ Main() {
 	fi
 	rm /etc/sysctl.conf
 	ln -s /etc/sysctl.d/99-sysctl.conf /etc/sysctl.conf
+	updatedb
 	case $RELEASE in
 		stretch)
 			# your code here
