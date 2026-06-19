@@ -444,7 +444,7 @@ index 28af5590e570..e6bc0e096315 100644
 -static int get_type_to_scan(struct lruvec *lruvec, int swappiness)
 +static int get_type_to_scan(struct lruvec *lruvec, struct scan_control *sc, int swappiness)
  {
- 	struct ctrl_pos sp, pv;
+ 	struct ctrl_pos sp, pv = {};
  
 -	if (swappiness <= MIN_SWAPPINESS + 1)
 +	if (swappiness == MIN_SWAPPINESS)
