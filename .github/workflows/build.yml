@@ -10,6 +10,24 @@ jobs:
       - uses: actions/checkout@v6
       - name: Clean UP
         run: sudo ./cleanga.sh
+      - name: update dep
+        run: |
+          sudo apt-get -y dist-upgrade --autoremove --purge --ignore-missing -o APT::Get::Fix-Broken=false
+          sudo pip3 uninstall -y pylibfdt || true
+          sudo apt-get install -y swig libfdt-dev
+      - name: update fdt
+        run: |
+          mkdir -p /tmp/pylibfdt
+          pip download --no-binary pylibfdt pylibfdt==1.7.2.post1 --dest /tmp/pylibfdt
+          cd /tmp/pylibfdt
+          tar -xzf pylibfdt-*.tar.gz
+          cd pylibfdt-*/
+          find . -name "libfdt.i" -exec sed -i 's/PyInt_AsLong/PyLong_AsLong/g' {} \;
+          sudo python3 setup.py bdist_wheel
+          sudo pip3 install dist/*.whl --force-reinstall
+          python3 -c "import libfdt; print('libfdt installed successfully')"
+          cd /
+          sudo rm -rf /tmp/pylibfdt
       - name: enable ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:

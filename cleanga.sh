@@ -28,7 +28,20 @@ rm -rf /usr/share/dotnet
 rm -rf /opt/ghc
 rm -rf /usr/local/.ghcup
 rm -rf "$AGENT_TOOLSDIRECTORY"
-apt-get purge -y '^aspnetcore-.*' '^dotnet-.*' '^llvm-.*' 'php.*' '^mongodb-.*' '^mysql-.*' '^ghc-.*' azure-cli google-chrome-stable firefox powershell hhvm mono-devel libgl1-mesa-dri google-cloud-sdk google-cloud-cli --autoremove --purge --fix-missing
+cat <<EOF |tee /etc/apt/preferences.d/nosnap.pref
+Package: snapd
+Pin: release a=*
+Pin-Priority: -10
+
+Package: snap
+Pin: release a=*
+Pin-Priority: -10
+EOF
+systemctl stop --force snapd
+systemctl disable --now snapd.socket
+rm -rf /var/cache/snapd /var/lib/snapd /snap ~/snap
+dpkg --purge firefox xul-ext-ubufox
+apt-get purge -y '^aspnetcore-.*' '^dotnet-.*' '^llvm-.*' 'php.*' '^mongodb-.*' '^mysql-.*' '^ghc-.*' azure-cli google-chrome-stable firefox powershell hhvm mono-devel libgl1-mesa-dri google-cloud-sdk google-cloud-cli '^firefox.*' snapd snap --autoremove --purge
 apt-get clean
 docker image prune --all --force
 exit 0
