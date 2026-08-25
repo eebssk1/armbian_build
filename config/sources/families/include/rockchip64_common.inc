@@ -70,7 +70,7 @@ esac
 # - binman-atf-mainline:  u-boot builds full boot image with mainline ATF from information in device tree.  See: https://docs.u-boot.org/en/latest/develop/package/binman.html
 
 #BOOT_SOC=`expr $BOOTCONFIG : '.*\(rk[[:digit:]]\+.*\)_.*'`
-BOOT_SOC=${BOOT_SOC:=$(expr $BOOTCONFIG : '.*\(rk[[:digit:]]\+.*\)_.*' || true)}
+BOOT_SOC=${BOOT_SOC:=$(expr "${BOOTCONFIG}" : '.*\(rk[[:digit:]]\+.*\)_.*' || true)}
 
 if [[ "a${BOOT_SOC}a" == "aa" ]]; then
 	if [[ "${BOOTCONFIG}" != "" && "${BOOTCONFIG}" != " none" ]]; then # only warn if BOOTCONFIG set and not 'none'
@@ -158,6 +158,8 @@ case "$BOOT_SOC" in
 		# Pinning to v1.08 until newer DDR binaries are validated across rk3576 boards.
 		DDR_BLOB="${DDR_BLOB:-"rk35/rk3576_ddr_lp4_2112MHz_lp5_2736MHz_v1.08.bin"}"
 		BL31_BLOB="${BL31_BLOB:-"rk35/rk3576_bl31_v1.20.elf"}"
+		# ROCKUSB_BLOB is used to flash a board with rkdeveloptool (Linux, can use 'rkdevflash' extension) or RKDevTool (Windows) in MASKROM mode
+		ROCKUSB_BLOB="rk35/rk3576_spl_loader_v1.03.102.bin"
 		;;
 
 	rk3588) #CPUMAX undefined?
