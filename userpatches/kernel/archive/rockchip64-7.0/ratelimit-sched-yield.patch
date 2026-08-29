@@ -1,44 +1,68 @@
 From 467904416b3786c9f2b29ca683d36cb2523ae7ce Mon Sep 17 00:00:00 2001
 From: Colin Ian King <colin.i.king@intel.com>
 Date: Thu, 17 Oct 2024 16:29:50 +0100
-Subject: [PATCH] handle sched_yield gracefully when being hammered
+Subject: [PATCH] rate limit sched_yield with a token bucket
 
-Some misguided apps hammer sched_yield() in a tight loop (they should be using futexes instead)
-which causes massive lock contention even if there is little work to do or to yield to.
-rare limit yielding since the base scheduler does a pretty good job already about just
-running the right things
+Some misguided apps hammer sched_yield() in a tight loop (they should be
+using futexes instead) which causes massive lock contention even if there
+is little work to do or to yield to.
+
+Modified from the original jiffies-based version: rate limit on a fixed
+1ms window via local_clock() with a token bucket (YIELD_MAX_PER_MS per
+window), so behavior no longer depends on HZ (the original one-jiffy
+window was 5.7ms at HZ=175, making sched_yield() a no-op for well-behaved
+waiters for too long) while still allowing short bursts of well-behaved
+yield-based waiters.
 
 Signed-off-by: Colin Ian King <colin.i.king@intel.com>
 ---
- kernel/sched/syscalls.c | 12 ++++++++++++
- 1 file changed, 12 insertions(+)
+ kernel/sched/syscalls.c | 26 +++++++++++++++++++++++++
+ 1 file changed, 26 insertions(+)
 
 diff --git a/kernel/sched/syscalls.c b/kernel/sched/syscalls.c
-index ae1b42775ef9..441ac65f4f15 100644
 --- a/kernel/sched/syscalls.c
 +++ b/kernel/sched/syscalls.c
-@@ -1456,10 +1456,24 @@
+@@ -8,6 +8,7 @@
+  *  Copyright (C) 1998-2024  Ingo Molnar, Red Hat
+  */
+ #include <linux/sched.h>
++#include <linux/sched/clock.h>
+ #include <linux/cpuset.h>
+ #include <linux/sched/debug.h>
+ 
+@@ -1456,10 +1456,35 @@
  */
  __read_mostly int sysctl_sched_yield_type = 2;
  
 +static DEFINE_PER_CPU(unsigned long, last_yield);
++static DEFINE_PER_CPU(unsigned int, yield_budget);
++
++#define YIELD_MAX_PER_MS	4
 +
  static void do_sched_yield(void)
  {
  	struct rq_flags rf;
  	struct rq *rq;
-+	unsigned long l_yield = this_cpu_read(last_yield);
-+	unsigned long cur_jif;
++	unsigned long cur_ns;
 +
 +	cond_resched();
 +
-+	/* rate limit yielding to something sensible */
-+	cur_jif = READ_ONCE(jiffies);
++	/* Token-bucket rate limit, HZ-independent via local_clock():
++	 * allow YIELD_MAX_PER_MS yields per 1ms window, then throttle.
++	 * Blocks misguided apps that hammer sched_yield() in a tight loop
++	 * (millions of calls per second, causing massive lock contention)
++	 * while preserving short bursts of well-behaved yield-based waiters.
++	 */
++	cur_ns = local_clock();
++	if (unlikely(cur_ns - this_cpu_read(last_yield) >= 1000000UL)) {
++		this_cpu_write(last_yield, cur_ns);
++		this_cpu_write(yield_budget, YIELD_MAX_PER_MS);
++	}
 +
-+	if (unlikely(!time_after(cur_jif, l_yield)))
++	if (unlikely(this_cpu_read(yield_budget) == 0))
 +		return;
 +
-+	this_cpu_write(last_yield, cur_jif);
++	this_cpu_dec(yield_budget);
  
  	rq = this_rq_lock_irq(&rf);
  
