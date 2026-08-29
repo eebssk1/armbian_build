@@ -16,8 +16,8 @@ yield-based waiters.
 
 Signed-off-by: Colin Ian King <colin.i.king@intel.com>
 ---
- kernel/sched/syscalls.c | 26 +++++++++++++++++++++++++
- 1 file changed, 26 insertions(+)
+ kernel/sched/syscalls.c | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
 
 diff --git a/kernel/sched/syscalls.c b/kernel/sched/syscalls.c
 --- a/kernel/sched/syscalls.c
@@ -30,14 +30,14 @@ diff --git a/kernel/sched/syscalls.c b/kernel/sched/syscalls.c
  #include <linux/cpuset.h>
  #include <linux/sched/debug.h>
  
-@@ -1456,10 +1456,35 @@
- */
- __read_mostly int sysctl_sched_yield_type = 2;
+@@ -1332,10 +1333,35 @@
+ 	return ret;
+ }
  
++#define YIELD_MAX_PER_MS	4
++
 +static DEFINE_PER_CPU(unsigned long, last_yield);
 +static DEFINE_PER_CPU(unsigned int, yield_budget);
-+
-+#define YIELD_MAX_PER_MS	4
 +
  static void do_sched_yield(void)
  {
