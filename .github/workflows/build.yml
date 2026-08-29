@@ -16,6 +16,7 @@ jobs:
           sudo pip3 uninstall -y pylibfdt || true
           sudo apt-get install -y swig libfdt-dev
       - name: update fdt
+        if: false
         run: |
           mkdir -p /tmp/pylibfdt
           pip download --no-binary pylibfdt pylibfdt==1.7.2.post1 --dest /tmp/pylibfdt
