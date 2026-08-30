@@ -22,7 +22,7 @@ diff --git a/drivers/hid/hid-core.c b/drivers/hid/hid-core.c
 index 111111111111..222222222222 100644
 --- a/drivers/hid/hid-core.c
 +++ b/drivers/hid/hid-core.c
-@@ -2320,6 +2320,9 @@ int hid_connect(struct hid_device *hdev, unsigned int connect_mask)
+@@ -2366,6 +2366,9 @@ int hid_connect(struct hid_device *hdev, unsigned int connect_mask)
  	case BUS_I2C:
  		bus = "I2C";
  		break;
@@ -136,7 +136,7 @@ diff --git a/drivers/hid/hid-core.c b/drivers/hid/hid-core.c
 index 111111111111..222222222222 100644
 --- a/drivers/hid/hid-core.c
 +++ b/drivers/hid/hid-core.c
-@@ -2323,6 +2323,9 @@ int hid_connect(struct hid_device *hdev, unsigned int connect_mask)
+@@ -2369,6 +2369,9 @@ int hid_connect(struct hid_device *hdev, unsigned int connect_mask)
  	case BUS_SPI:
  		bus = "SPI";
  		break;
@@ -252,7 +252,7 @@ index 111111111111..222222222222 100644
  			else
  				table = apple_fn_keys;
  		}
-@@ -940,6 +949,10 @@ static int apple_probe(struct hid_device *hdev,
+@@ -942,6 +951,10 @@ static int apple_probe(struct hid_device *hdev,
  	struct apple_sc *asc;
  	int ret;
  
@@ -263,7 +263,7 @@ index 111111111111..222222222222 100644
  	asc = devm_kzalloc(&hdev->dev, sizeof(*asc), GFP_KERNEL);
  	if (asc == NULL) {
  		hid_err(hdev, "can't alloc apple descriptor\n");
-@@ -1218,6 +1231,8 @@ static const struct hid_device_id apple_devices[] = {
+@@ -1220,6 +1233,8 @@ static const struct hid_device_id apple_devices[] = {
  		.driver_data = APPLE_HAS_FN | APPLE_ISO_TILDE_QUIRK | APPLE_RDESC_BATTERY },
  	{ HID_BLUETOOTH_DEVICE(BT_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_MAGIC_KEYBOARD_NUMPAD_2024),
  		.driver_data = APPLE_HAS_FN | APPLE_ISO_TILDE_QUIRK },
@@ -303,7 +303,7 @@ index 111111111111..222222222222 100644
  					table = macbookpro_dedicated_esc_fn_keys;
  					break;
  				default:
-@@ -949,7 +950,7 @@ static int apple_probe(struct hid_device *hdev,
+@@ -951,7 +952,7 @@ static int apple_probe(struct hid_device *hdev,
  	struct apple_sc *asc;
  	int ret;
  
@@ -312,7 +312,7 @@ index 111111111111..222222222222 100644
  	    hdev->type != HID_TYPE_SPI_KEYBOARD)
  		return -ENODEV;
  
-@@ -1233,6 +1234,8 @@ static const struct hid_device_id apple_devices[] = {
+@@ -1235,6 +1236,8 @@ static const struct hid_device_id apple_devices[] = {
  		.driver_data = APPLE_HAS_FN | APPLE_ISO_TILDE_QUIRK },
  	{ HID_SPI_DEVICE(SPI_VENDOR_ID_APPLE, HID_ANY_ID),
  		.driver_data = APPLE_HAS_FN | APPLE_ISO_TILDE_QUIRK },
@@ -1065,53 +1065,6 @@ index 111111111111..222222222222 100644
  	{ }
  };
  MODULE_DEVICE_TABLE(hid, magic_mice);
--- 
-Armbian
-
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Janne Grunau <j@jannau.net>
-Date: Sun, 11 Dec 2022 22:56:16 +0100
-Subject: HID: magicmouse: Add .reset_resume for SPI trackpads
-
-The trackpad has to request multi touch reports during resume.
-
-Signed-off-by: Janne Grunau <j@jannau.net>
----
- drivers/hid/hid-magicmouse.c | 14 ++++++++++
- 1 file changed, 14 insertions(+)
-
-diff --git a/drivers/hid/hid-magicmouse.c b/drivers/hid/hid-magicmouse.c
-index 111111111111..222222222222 100644
---- a/drivers/hid/hid-magicmouse.c
-+++ b/drivers/hid/hid-magicmouse.c
-@@ -1353,6 +1353,16 @@ static const struct hid_device_id magic_mice[] = {
- };
- MODULE_DEVICE_TABLE(hid, magic_mice);
- 
-+#ifdef CONFIG_PM
-+static int magicmouse_reset_resume(struct hid_device *hdev)
-+{
-+	if (hdev->bus == BUS_SPI)
-+		return magicmouse_enable_multitouch(hdev);
-+
-+	return 0;
-+}
-+#endif
-+
- static struct hid_driver magicmouse_driver = {
- 	.name = "magicmouse",
- 	.id_table = magic_mice,
-@@ -1363,6 +1373,10 @@ static struct hid_driver magicmouse_driver = {
- 	.event = magicmouse_event,
- 	.input_mapping = magicmouse_input_mapping,
- 	.input_configured = magicmouse_input_configured,
-+#ifdef CONFIG_PM
-+        .reset_resume = magicmouse_reset_resume,
-+#endif
-+
- };
- module_hid_driver(magicmouse_driver);
- 
 -- 
 Armbian
 
