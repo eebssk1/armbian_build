@@ -461,15 +461,17 @@ index 28af5590e570..e6bc0e096315 100644
  		return LRU_GEN_FILE;
  
  	if (swappiness >= MAX_SWAPPINESS)
-@@ -4665,7 +4804,7 @@ static int isolate_folios(unsigned long nr_to_scan, struct lruvec *lruvec,
- 			  int *type_scanned, struct list_head *list)
+@@ -4763,9 +4902,9 @@ static int isolate_folios(unsigned long nr_to_scan, struct lruvec *lruvec,
+ 			  int *isolate_type, int *isolate_scanned)
  {
  	int i;
+ 	int total_scanned = 0;
 -	int type = get_type_to_scan(lruvec, swappiness);
 +	int type = get_type_to_scan(lruvec, sc, swappiness);
  
  	for_each_evictable_type(i, swappiness) {
  		int scanned;
+ 		int tier = get_tier_idx(lruvec, type);
 @@ -4911,6 +5050,12 @@ static int shrink_one(struct lruvec *lruvec, struct scan_control *sc)
  	struct mem_cgroup *memcg = lruvec_memcg(lruvec);
  	struct pglist_data *pgdat = lruvec_pgdat(lruvec);

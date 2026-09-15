@@ -15,7 +15,7 @@
  
  /* This type should contain at least SFQ_MAX_DEPTH + 1 + SFQ_MAX_FLOWS values */
  typedef u16 sfq_index;
-@@ -109,10 +109,10 @@
+@@ -109,10 +109,10 @@ struct sfq_sched_data {
  	int		limit;		/* limit of total number of packets in this qdisc */
  	unsigned int	divisor;	/* number of slots in hash table */
  	u8		headdrop;
@@ -28,7 +28,7 @@
  	u8		flags;
  	struct tcf_proto __rcu *filter_list;
  	struct tcf_block *block;
-@@ -639,9 +639,10 @@
+@@ -642,9 +642,10 @@ static int sfq_change(struct Qdisc *sch, struct nlattr *opt,
  	unsigned int divisor;
  	int perturb_period;
  	u8 headdrop;
@@ -40,7 +40,7 @@
  
  
  	if (opt->nla_len < nla_attr_size(sizeof(*ctl)))
-@@ -694,6 +695,7 @@
+@@ -697,6 +698,7 @@ static int sfq_change(struct Qdisc *sch, struct nlattr *opt,
  	}
  	if (ctl_v1) {
  		if (ctl_v1->depth)
@@ -48,7 +48,7 @@
  			maxdepth = min_t(u32, ctl_v1->depth, SFQ_MAX_DEPTH);
  		if (p) {
  			red_set_parms(p,
-@@ -708,9 +710,10 @@
+@@ -711,9 +713,10 @@ static int sfq_change(struct Qdisc *sch, struct nlattr *opt,
  	}
  	if (ctl->limit) {
  		limit = min_t(u32, ctl->limit, maxdepth * maxflows);
@@ -60,7 +60,7 @@
  		sch_tree_unlock(sch);
  		kfree(p);
  		NL_SET_ERR_MSG_MOD(extack, "invalid limit");
-@@ -723,6 +726,8 @@
+@@ -726,6 +729,8 @@ static int sfq_change(struct Qdisc *sch, struct nlattr *opt,
  	q->headdrop = headdrop;
  	q->maxdepth = maxdepth;
  	q->maxflows = maxflows;
@@ -69,10 +69,10 @@
  	WRITE_ONCE(q->perturb_period, perturb_period);
  	q->quantum = quantum;
  	q->flags = flags;
-@@ -797,7 +802,9 @@
- 	q->divisor = SFQ_DEFAULT_HASH_DIVISOR;
+@@ -801,7 +806,9 @@ static int sfq_init(struct Qdisc *sch, struct nlattr *opt,
  	q->maxflows = SFQ_DEFAULT_FLOWS;
- 	q->quantum = psched_mtu(qdisc_dev(sch));
+ 	q->quantum = clamp_t(u32, psched_mtu(qdisc_dev(sch)),
+ 			     256, 1 << 20);
 -	q->perturb_period = 0;
 +	q->perturb_period = 300 * HZ;
 +	q->headdrop = 1;
