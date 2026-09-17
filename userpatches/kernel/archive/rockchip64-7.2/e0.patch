@@ -1,0 +1,10 @@
+--- a/kernel/sched/syscalls.c	2026-04-03 16:07:02.576423882 +0800
++++ b/kernel/sched/syscalls.c	2026-04-03 17:07:32.349034162 +0800
+@@ -790,6 +790,7 @@
+ {
+ 	return _sched_setscheduler(p, policy, param, false);
+ }
++EXPORT_SYMBOL_GPL(sched_setscheduler_nocheck);
+ 
+ /*
+  * SCHED_FIFO is a broken scheduler model; that is, it is fundamentally
