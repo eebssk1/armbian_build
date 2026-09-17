@@ -120,7 +120,7 @@
 		compatible = "pwm-fan";
 		#cooling-cells = <2>;
 		/* Extend SBC capacitors and CPU lifetime */
-		cooling-levels = <180 195 215 235 255>;
+		cooling-levels = <0 195 215 235 255>;
 		fan-supply = <&vcc5v0_sys>;
 		pwms = <&pwm2 0 40000 0>;
 	};
