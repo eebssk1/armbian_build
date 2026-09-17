@@ -1,0 +1,314 @@
+--- a/net/ipv4/tcp_bbr.c	2026-09-17 06:36:58.800492881 +0000
++++ b/net/ipv4/tcp_bbr.c	2026-09-17 06:36:58.801794260 +0000
+@@ -182,16 +182,16 @@
+ };
+ 
+ /* Window length of min_rtt filter (in sec): */
+-static const u32 bbr_min_rtt_win_sec = 10;
++static const u32 bbr_min_rtt_win_sec = 13;
+ /* Minimum time (in ms) spent at bbr_cwnd_min_target in BBR_PROBE_RTT mode: */
+-static const u32 bbr_probe_rtt_mode_ms = 200;
++static const u32 bbr_probe_rtt_mode_ms = 150;
+ /* Window length of probe_rtt_min_us filter (in ms), and consequently the
+  * typical interval between PROBE_RTT mode entries. The default is 5000ms.
+  * Note that bbr_probe_rtt_win_ms must be <= bbr_min_rtt_win_sec * MSEC_PER_SEC
+  */
+-static const u32 bbr_probe_rtt_win_ms = 5000;
++static const u32 bbr_probe_rtt_win_ms = 6500;
+ /* Proportion of cwnd to estimated BDP in PROBE_RTT, in units of BBR_UNIT: */
+-static const u32 bbr_probe_rtt_cwnd_gain = BBR_UNIT * 1 / 2;
++static const u32 bbr_probe_rtt_cwnd_gain = BBR_UNIT * 17 / 20;
+ 
+ /* Use min_rtt to help adapt TSO burst size, with smaller min_rtt resulting
+  * in bigger TSO bursts. We cut the RTT-based allowance in half
+@@ -213,21 +213,21 @@
+  * and send the same number of packets per RTT that an un-paced, slow-starting
+  * Reno or CUBIC flow would:
+  */
+-static const int bbr_startup_pacing_gain = BBR_UNIT * 277 / 100 + 1;
++static const int bbr_startup_pacing_gain = BBR_UNIT * 304 / 100 + 1;
+ /* The gain for deriving startup cwnd: */
+-static const int bbr_startup_cwnd_gain = BBR_UNIT * 2;
++static const int bbr_startup_cwnd_gain = BBR_UNIT * 28 / 10;
+ /* The pacing gain in BBR_DRAIN is calculated to typically drain
+  * the queue created in BBR_STARTUP in a single round:
+  */
+-static const int bbr_drain_gain = BBR_UNIT * 1000 / 2885;
++static const int bbr_drain_gain = BBR_UNIT * 1000 / 2412;
+ /* The gain for deriving steady-state cwnd tolerates delayed/stretched ACKs: */
+-static const int bbr_cwnd_gain  = BBR_UNIT * 2;
++static const int bbr_cwnd_gain  = BBR_UNIT * 26 / 10;
+ /* The pacing_gain values for the PROBE_BW gain cycle, to discover/share bw: */
+ static const int bbr_pacing_gain[] = {
+-	BBR_UNIT * 5 / 4,	/* UP: probe for more available bw */
+-	BBR_UNIT * 91 / 100,	/* DOWN: drain queue and/or yield bw */
+-	BBR_UNIT,		/* CRUISE: try to use pipe w/ some headroom */
+-	BBR_UNIT,		/* REFILL: refill pipe to estimated 100% */
++	BBR_UNIT * 3,	/* UP: probe for more available bw */
++	BBR_UNIT * 22 / 25,	/* DOWN: drain queue and/or yield bw */
++	BBR_UNIT * 11 / 10,		/* CRUISE: try to use pipe w/ some headroom */
++	BBR_UNIT * 5 / 4,		/* REFILL: refill pipe to estimated 100% */
+ };
+ enum bbr_pacing_gain_phase {
+ 	BBR_BW_PROBE_UP		= 0,  /* push up inflight to probe for bw/vol */
+@@ -236,26 +236,30 @@
+ 	BBR_BW_PROBE_REFILL	= 3,  /* refill the pipe again to 100% */
+ };
+ 
++/* Avoid over pacing when app-limited in STARTUP, but still try to probe for more bandwidth.
++*/
++static const u32 bbr_limited_pacing_gain = BBR_UNIT * 61 / 50;
++
+ /* Try to keep at least this many packets in flight, if things go smoothly. For
+  * smooth functioning, a sliding window protocol ACKing every other packet
+  * needs at least 4 packets in flight:
+  */
+-static const u32 bbr_cwnd_min_target = 4;
++static const u32 bbr_cwnd_min_target = 12;
+ 
+ /* To estimate if BBR_STARTUP or BBR_BW_PROBE_UP has filled pipe... */
+ /* If bw has increased significantly (1.25x), there may be more bw available: */
+-static const u32 bbr_full_bw_thresh = BBR_UNIT * 5 / 4;
++static const u32 bbr_full_bw_thresh = BBR_UNIT * 118 / 100;
+ /* But after 3 rounds w/o significant bw growth, estimate pipe is full: */
+-static const u32 bbr_full_bw_cnt = 3;
++static const u32 bbr_full_bw_cnt = 4;
+ 
+ /* Gain factor for adding extra_acked to target cwnd: */
+-static const int bbr_extra_acked_gain = BBR_UNIT;
++static const int bbr_extra_acked_gain = BBR_UNIT * 27 / 25;
+ /* Window length of extra_acked window. */
+ static const u32 bbr_extra_acked_win_rtts = 5;
+ /* Max allowed val for ack_epoch_acked, after which sampling epoch is reset */
+ static const u32 bbr_ack_epoch_acked_reset_thresh = 1U << 20;
+ /* Time period for clamping cwnd increment due to ack aggregation */
+-static const u32 bbr_extra_acked_max_us = 100 * 1000;
++static const u32 bbr_extra_acked_max_us = 118 * 1000;
+ 
+ /* Flags to control BBR ECN-related behavior... */
+ 
+@@ -265,30 +269,30 @@
+ /* Max RTT (in usec) at which to use sender-side ECN logic.
+  * Disabled when 0 (ECN allowed at any RTT).
+  */
+-static const u32 bbr_ecn_max_rtt_us = 5000;
++static const u32 bbr_ecn_max_rtt_us = 7200;
+ 
+ /* On losses, scale down inflight and pacing rate by beta scaled by BBR_SCALE.
+  * No loss response when 0.
+  */
+-static const u32 bbr_beta = BBR_UNIT * 30 / 100;
++static const u32 bbr_beta = BBR_UNIT * 3 / 40;
+ 
+ /* Gain factor for ECN mark ratio samples, scaled by BBR_SCALE (1/16 = 6.25%) */
+-static const u32 bbr_ecn_alpha_gain = BBR_UNIT * 1 / 16;
++static const u32 bbr_ecn_alpha_gain = BBR_UNIT * 1 / 14;
+ 
+ /* The initial value for ecn_alpha; 1.0 allows a flow to respond quickly
+  * to congestion if the bottleneck is congested when the flow starts up.
+  */
+-static const u32 bbr_ecn_alpha_init = BBR_UNIT;
++static const u32 bbr_ecn_alpha_init = BBR_UNIT * 9 / 10;
+ 
+ /* On ECN, cut inflight_lo to (1 - ecn_factor * ecn_alpha) scaled by BBR_SCALE.
+  * No ECN based bounding when 0.
+  */
+-static const u32 bbr_ecn_factor = BBR_UNIT * 1 / 3;	 /* 1/3 = 33% */
++static const u32 bbr_ecn_factor = BBR_UNIT * 1 / 5;	 /* 1/5 = 20% */
+ 
+ /* Estimate bw probing has gone too far if CE ratio exceeds this threshold.
+  * Scaled by BBR_SCALE. Disabled when 0.
+  */
+-static const u32 bbr_ecn_thresh = BBR_UNIT * 1 / 2;  /* 1/2 = 50% */
++static const u32 bbr_ecn_thresh = BBR_UNIT * 3 / 5;  /* 3/5 = 60% */
+ 
+ /* If non-zero, if in a cycle with no losses but some ECN marks, after ECN
+  * clears then make the first round's increment to inflight_hi the following
+@@ -297,7 +301,7 @@
+ static const u32 bbr_ecn_reprobe_gain = BBR_UNIT * 1 / 2;
+ 
+ /* Estimate bw probing has gone too far if loss rate exceeds this level. */
+-static const u32 bbr_loss_thresh = BBR_UNIT * 2 / 100;  /* 2% loss */
++static const u32 bbr_loss_thresh = BBR_UNIT * 9 / 100;  /* 9% loss */
+ 
+ /* Slow down for a packet loss recovered by TLP? */
+ static const bool bbr_loss_probe_recovery = true;
+@@ -306,22 +310,22 @@
+  * and loss rate is higher than bbr_loss_thresh.
+  * Disabled if 0.
+  */
+-static const u32 bbr_full_loss_cnt = 6;
++static const u32 bbr_full_loss_cnt = 7;
+ 
+ /* Exit STARTUP if number of round trips with ECN mark rate above ecn_thresh
+  * meets this count.
+  */
+-static const u32 bbr_full_ecn_cnt = 2;
++static const u32 bbr_full_ecn_cnt = 4;
+ 
+ /* Fraction of unutilized headroom to try to leave in path upon high loss. */
+-static const u32 bbr_inflight_headroom = BBR_UNIT * 15 / 100;
++static const u32 bbr_inflight_headroom = BBR_UNIT * 1 / 33;
+ 
+ /* How much do we increase cwnd_gain when probing for bandwidth in
+  * BBR_BW_PROBE_UP? This specifies the increment in units of
+  * BBR_UNIT/4. The default is 1, meaning 0.25.
+  * The min value is 0 (meaning 0.0); max is 3 (meaning 0.75).
+  */
+-static const u32 bbr_bw_probe_cwnd_gain = 1;
++static const u32 bbr_bw_probe_cwnd_gain = 2;
+ 
+ /* Max number of packet-timed rounds to wait before probing for bandwidth.  If
+  * we want to tolerate 1% random loss per round, and not have this cut our
+@@ -330,26 +334,26 @@
+  * We aim to be fair with Reno/CUBIC up to a BDP of at least:
+  *  BDP = 25Mbps * .030sec /(1514bytes) = 61.9 packets
+  */
+-static const u32 bbr_bw_probe_max_rounds = 63;
++static const u32 bbr_bw_probe_max_rounds = 24;
+ 
+ /* Max amount of randomness to inject in round counting for Reno-coexistence.
+  */
+-static const u32 bbr_bw_probe_rand_rounds = 2;
++static const u32 bbr_bw_probe_rand_rounds = 3;
+ 
+ /* Use BBR-native probe time scale starting at this many usec.
+  * We aim to be fair with Reno/CUBIC up to an inter-loss time epoch of at least:
+  *  BDP*RTT = 25Mbps * .030sec /(1514bytes) * 0.030sec = 1.9 secs
+  */
+-static const u32 bbr_bw_probe_base_us = 2 * USEC_PER_SEC;  /* 2 secs */
++static const u32 bbr_bw_probe_base_us = USEC_PER_SEC * 3 / 2;  /* 1.5 secs */
+ 
+ /* Use BBR-native probes spread over this many usec: */
+-static const u32 bbr_bw_probe_rand_us = 1 * USEC_PER_SEC;  /* 1 secs */
++static const u32 bbr_bw_probe_rand_us = USEC_PER_SEC * 11 / 10;  /* 1.1 secs */
+ 
+ /* Use fast path if app-limited, no loss/ECN, and target cwnd was reached? */
+ static const bool bbr_fast_path = true;
+ 
+ /* Use fast ack mode? */
+-static const bool bbr_fast_ack_mode = true;
++static const bool bbr_fast_ack_mode = false;
+ 
+ static u32 bbr_max_bw(const struct sock *sk);
+ static u32 bbr_bw(const struct sock *sk);
+@@ -470,10 +474,17 @@
+ 	struct bbr *bbr = inet_csk_ca(sk);
+ 	unsigned long rate = bbr_bw_to_pacing_rate(sk, bw, gain);
+ 
++	bool force_update = unlikely(bbr->mode == BBR_STARTUP && tp->app_limited);
++
+ 	if (unlikely(!bbr->has_seen_rtt && tp->srtt_us))
+ 		bbr_init_pacing_rate_from_rtt(sk);
+-	if (bbr_full_bw_reached(sk) || rate > READ_ONCE(sk->sk_pacing_rate))
++	if (bbr_full_bw_reached(sk) || rate > READ_ONCE(sk->sk_pacing_rate) || force_update) {
++		if (unlikely(bbr->min_rtt_us <= 750)) {
++			gain = gain > BBR_UNIT ? min(gain, BBR_UNIT * 5 / 4) : gain;
++			rate = bbr_bw_to_pacing_rate(sk, bw, gain);
++		}
+ 		WRITE_ONCE(sk->sk_pacing_rate, rate);
++	}
+ }
+ 
+ /* Return the number of segments BBR would like in a TSO/GSO skb, given a
+@@ -582,6 +593,7 @@
+ 	struct bbr *bbr = inet_csk_ca(sk);
+ 	u32 bdp;
+ 	u64 w;
++	u32 minrtt = bbr->min_rtt_us;
+ 
+ 	/* If we've never had a valid RTT sample, cap cwnd at the initial
+ 	 * default. This should only happen when the connection is not using TCP
+@@ -589,16 +601,36 @@
+ 	 * ACKed so far. In this case, an RTO can cut cwnd to 1, in which
+ 	 * case we need to slow-start up toward something safe: initial cwnd.
+ 	 */
+-	if (unlikely(bbr->min_rtt_us == ~0U))	 /* no valid RTT samples yet? */
++	if (unlikely(minrtt == ~0U))	 /* no valid RTT samples yet? */
+ 		return bbr->init_cwnd;  /* be safe: cap at initial cwnd */
+ 
+-	w = (u64)bw * bbr->min_rtt_us;
++	w = (u64)bw * minrtt;
+ 
+ 	/* Apply a gain to the given value, remove the BW_SCALE shift, and
+ 	 * round the value up to avoid a negative feedback loop.
+ 	 */
+ 	bdp = (((w * gain) >> BBR_SCALE) + BW_UNIT - 1) / BW_UNIT;
+ 
++	if(minrtt >= 180 * USEC_PER_MSEC) {
++			bdp += 8;
++			bdp += bw >= 44738 ? 6 : 3;
++	} else if(minrtt >= 140 * USEC_PER_MSEC) {
++			bdp += 6;
++			bdp += bw >= 44738 ? 5 : 2;
++	} else if(minrtt >= 90 * USEC_PER_MSEC) {
++			bdp += 5;
++			bdp += bw >= 44738 ? 4 : 1;
++	} else if(minrtt >= 31 * USEC_PER_MSEC) {
++			bdp += 4;
++			bdp += bw >= 44738 ? 3 : 1;
++	} else if(minrtt >= 16 * USEC_PER_MSEC) {
++			bdp += 2;
++			bdp += bw >= 44738 ? 2 : 0;
++	} else if(minrtt >= 6 * USEC_PER_MSEC) {
++			bdp += 1;
++			bdp += bw >= 44738 ? 1 : 0;
++	}
++
+ 	return bdp;
+ }
+ 
+@@ -721,18 +753,27 @@
+ 	/* Update cwnd and enable fast path if cwnd reaches target_cwnd. */
+ 	bbr->try_fast_path = 0;
+ 	if (bbr_full_bw_reached(sk)) { /* only cut cwnd if we filled the pipe */
+-		cwnd += acked;
++		cwnd += acked + (acked >> 3);
+ 		if (cwnd >= target_cwnd) {
+ 			cwnd = target_cwnd;
+ 			bbr->try_fast_path = 1;
+ 		}
+ 	} else if (cwnd < target_cwnd || cwnd  < 2 * bbr->init_cwnd) {
+-		cwnd += acked;
++		cwnd += acked + (acked >> 3);
+ 	} else {
+ 		bbr->try_fast_path = 1;
+ 	}
+ 
+ 	cwnd = max_t(u32, cwnd, bbr_param(sk, cwnd_min_target));
++
++	if (unlikely(bbr->min_rtt_us <= 750)) {
++			cwnd = max_t(u32, cwnd, 50);
++			if (bbr->mode == BBR_PROBE_RTT)
++				cwnd = max_t(u32, cwnd / 2, 24);
++			tcp_snd_cwnd_set(tp, min(cwnd, tp->snd_cwnd_clamp));
++			return;
++	}
++
+ done:
+ 	tcp_snd_cwnd_set(tp, min(cwnd, tp->snd_cwnd_clamp));  /* global cap */
+ 	if (bbr->mode == BBR_PROBE_RTT)  /* drain queue, refresh min_rtt */
+@@ -951,10 +992,11 @@
+ static void bbr_update_gains(struct sock *sk)
+ {
+ 	struct bbr *bbr = inet_csk_ca(sk);
++	struct tcp_sock *tp = tcp_sk(sk);
+ 
+ 	switch (bbr->mode) {
+ 	case BBR_STARTUP:
+-		bbr->pacing_gain = bbr_param(sk, startup_pacing_gain);
++		bbr->pacing_gain = tp->app_limited ? bbr_param(sk, limited_pacing_gain) : bbr_param(sk, startup_pacing_gain);
+ 		bbr->cwnd_gain	 = bbr_param(sk, startup_cwnd_gain);
+ 		break;
+ 	case BBR_DRAIN:
+@@ -1087,8 +1129,8 @@
+ 	/* See if we should use ECN sender logic for this connection. */
+ 	if (!bbr->ecn_eligible && bbr_can_use_ecn(sk) &&
+ 	    !!bbr_param(sk, ecn_factor) &&
+-	    (bbr->min_rtt_us <= bbr_ecn_max_rtt_us ||
+-	     !bbr_ecn_max_rtt_us))
++	    (bbr->min_rtt_us > 750 && (bbr->min_rtt_us <= bbr_ecn_max_rtt_us ||
++		 !bbr_ecn_max_rtt_us)))
+ 		bbr->ecn_eligible = 1;
+ 
+ 	/* Skip updating alpha only if not ECN-eligible and PLB is disabled. */
