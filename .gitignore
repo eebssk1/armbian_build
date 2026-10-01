@@ -17,6 +17,10 @@ ubuntu-*-cloudimg-console.log
 /cache/
 /*userpatches*/
 /userpatches
+# Track this build configuration, but keep other local user patches ignored.
+!/userpatches/
+/userpatches/*
+!/userpatches/config-firmware-overrides.conf
 
 ### General annoyances ###
 .DS_Store
