@@ -73,6 +73,12 @@ jobs:
         with:
           delete_release: true
           tag_name: ${{ env.VER }}
+      - name: compress img
+        run: |
+          for a in output/images/*
+          do
+          xz -8 $a
+          done
       - name: release
         uses: ncipollo/release-action@v1.16.0
         with:
