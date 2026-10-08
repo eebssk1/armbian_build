@@ -77,7 +77,7 @@ jobs:
         run: |
           for a in output/images/*
           do
-          xz -8 $a
+          sudo xz -8 $a
           done
       - name: release
         uses: ncipollo/release-action@v1.16.0
