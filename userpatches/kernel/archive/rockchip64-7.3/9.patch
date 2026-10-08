@@ -1,0 +1,84 @@
+diff --git a/Makefile b/Makefile
+index 7c855e6fe544..8577caca06ed 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1026,7 +1026,7 @@
+ 
+ # Clear used registers at func exit (to reduce data lifetime and ROP gadgets).
+ ifdef CONFIG_ZERO_CALL_USED_REGS
+-KBUILD_CFLAGS	+= -fzero-call-used-regs=used-gpr
++KBUILD_CFLAGS	+= -fzero-call-used-regs=used-gpr-arg
+ endif
+ 
+ ifdef CONFIG_FUNCTION_TRACER
+@@ -1143,13 +1143,22 @@
+ export CC_FLAGS_NO_FPU
+ 
+ ifneq ($(CONFIG_FUNCTION_ALIGNMENT),0)
+-# Set the minimal function alignment. Use the newer GCC option
+-# -fmin-function-alignment if it is available, or fall back to -falign-funtions.
+-# See also CONFIG_CC_HAS_SANE_FUNCTION_ALIGNMENT.
+-ifdef CONFIG_CC_HAS_MIN_FUNCTION_ALIGNMENT
+-KBUILD_CFLAGS += -fmin-function-alignment=$(CONFIG_FUNCTION_ALIGNMENT)
+-else
+-KBUILD_CFLAGS += -falign-functions=$(CONFIG_FUNCTION_ALIGNMENT)
++ifeq ($(CONFIG_DEBUG_FORCE_FUNCTION_ALIGN_32B_SOFT),y)
++CONFIG_FUNCTION_ALIGNMENT = 24
++endif
++REAL_FUNCTION_ALIGNMENT = $(CONFIG_FUNCTION_ALIGNMENT)
++ifeq ($(REAL_FUNCTION_ALIGNMENT), 24)
++REAL_FUNCTION_ALIGNMENT = 32:15:16:10
++endif
++ifeq ($(call cc-option,-falign-functions=$(REAL_FUNCTION_ALIGNMENT)),)
++REAL_FUNCTION_ALIGNMENT = $(CONFIG_FUNCTION_ALIGNMENT)
++endif
++KBUILD_CFLAGS += -falign-functions=$(REAL_FUNCTION_ALIGNMENT)
++ifeq ($(shell expr $(CONFIG_FUNCTION_ALIGNMENT) \> 8), 1)
++KBUILD_CFLAGS += $(call cc-option, -fmin-function-alignment=8)
++endif
++ifeq ($(shell expr $(CONFIG_FUNCTION_ALIGNMENT) \> 23), 1)
++KBUILD_CFLAGS += $(call cc-option, -flimit-function-alignment)
+ endif
+ endif
+ 
+diff --git a/arch/x86/Makefile b/arch/x86/Makefile
+index 8af6b80cffdd..9710c0d4aadc 100644
+--- a/arch/x86/Makefile
++++ b/arch/x86/Makefile
+@@ -138,10 +138,10 @@
+         KBUILD_CFLAGS += -m64
+ 
+         # Align jump targets to 1 byte, not the default 16 bytes:
+-        KBUILD_CFLAGS += $(call cc-option,-falign-jumps=1)
++        KBUILD_CFLAGS += $(call cc-option,-falign-jumps=4)
+ 
+         # Pack loops tightly as well:
+-        KBUILD_CFLAGS += $(call cc-option,-falign-loops=1)
++        KBUILD_CFLAGS += $(call cc-option,-falign-loops=4)
+ 
+         # Don't autogenerate traditional x87 instructions
+         KBUILD_CFLAGS += -mno-80387
+diff --git a/lib/Kconfig.debug b/lib/Kconfig.debug
+index 134b15a44625..0a4a5f9c1b5f 100644
+--- a/lib/Kconfig.debug
++++ b/lib/Kconfig.debug
+@@ -538,6 +538,19 @@
+ 	  it will slightly increase the kernel size and affect icache usage.
+ 
+ 	  It is mainly for debug and performance tuning use.
++
++config DEBUG_FORCE_FUNCTION_ALIGN_32B
++        bool "Force all function address 32B aligned"
++        depends on EXPERT && (X86_64 || ARM64 || PPC32 || PPC64 || ARC || RISCV || S390) && (!DEBUG_FORCE_FUNCTION_ALIGN_64B)
++        select FUNCTION_ALIGNMENT_32B
++        help
++          32 bit alignment
++
++config DEBUG_FORCE_FUNCTION_ALIGN_32B_SOFT
++       bool "allow smaller fallback alignment by compiler choice"
++       depends on DEBUG_FORCE_FUNCTION_ALIGN_32B && (!CFI_CLANG)
++       help
++         saves space slightly for some functions
+ 
+ #
+ # Select this config option from the architecture Kconfig, if it

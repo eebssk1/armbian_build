@@ -1,0 +1,22 @@
+diff --git a/mm/damon/core.c b/mm/damon/core.c
+index ab3c4d754964..23d5338afbfa 100644
+--- a/mm/damon/core.c
++++ b/mm/damon/core.c
+@@ -15,6 +15,7 @@
+ #include <linux/slab.h>
+ #include <linux/string.h>
+ #include <linux/string_choices.h>
++#include <linux/sched.h>
+ 
+ /* for damon_get_folio() used by node eligible memory metrics */
+ #include "ops-common.h"
+@@ -1947,6 +1948,9 @@
+ 			ctx->kdamond = NULL;
+ 		} else {
+ 			wait_for_completion(&ctx->kdamond_started);
++			struct sched_param sparam = { .sched_priority = 0 };
++			sched_setscheduler_nocheck(ctx->kdamond, SCHED_BATCH, &sparam);
++			set_user_nice(ctx->kdamond, 2);
+ 		}
+ 	}
+ 	mutex_unlock(&ctx->kdamond_lock);

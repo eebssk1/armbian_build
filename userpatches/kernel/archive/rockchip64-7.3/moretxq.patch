@@ -1,0 +1,13 @@
+diff --git a/include/net/pkt_sched.h b/include/net/pkt_sched.h
+index 90d3e7943b19..87f809506fa3 100644
+--- a/include/net/pkt_sched.h
++++ b/include/net/pkt_sched.h
+@@ -10,7 +10,7 @@
+ #include <net/net_namespace.h>
+ #include <uapi/linux/pkt_sched.h>
+ 
+-#define DEFAULT_TX_QUEUE_LEN	1000
++#define DEFAULT_TX_QUEUE_LEN	1920
+ #define STAB_SIZE_LOG_MAX	30
+ #define QDISC_PKT_LEN_MAX	(1 << 20)	/* 1 MiB */
+ 

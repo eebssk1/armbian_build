@@ -1,0 +1,170 @@
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+index d35ae49a991f..17c74207a6b0 100644
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -513,8 +513,10 @@
+ 	u64				runnable_sum;
+ 	u32				util_sum;
+ 	u32				period_contrib;
++	u32				wakeup_sum;
+ 	unsigned long			load_avg;
+ 	unsigned long			runnable_avg;
++	unsigned long			wakeup_avg;
+ 	unsigned long			util_avg;
+ 	unsigned int			util_est;
+ } ____cacheline_aligned;
+@@ -597,6 +599,8 @@
+ 	u64				slice;
+ 
+ 	u64				nr_migrations;
++
++	u16				wakeup_penalty_count;
+ 
+ #ifdef CONFIG_FAIR_GROUP_SCHED
+ 	int				depth;
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+index 57360f5cdde4..2d87d64763a3 100644
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -86,6 +86,23 @@
+ static unsigned int normalized_sysctl_sched_base_slice	= 700000ULL;
+ 
+ __read_mostly unsigned int sysctl_sched_migration_cost	= 500000UL;
++
++__read_mostly unsigned int sysctl_sched_burst_penalty_enable = 1;
++__read_mostly unsigned int sysctl_sched_burst_penalty_nice_strict = 1;
++__read_mostly unsigned int sysctl_sched_burst_penalty_relief = 4;
++
++/*
++ * Wakeup-burst penalty: a task that wakes very frequently while using
++ * little CPU (e.g. a hammering yield/futex loop) is pushed back on the
++ * EEVDF lag scale instead of being granted the full sleep benefit.
++ * wakeup_avg is a PELT-decayed wakeup rate: each wakeup adds 1024, the
++ * PELT half-life is 24ms and wakeup_avg = wakeup_sum / divider, so
++ * wakeup_avg ~= sustained wakeup rate in thousands per second.
++ * The threshold punishes ~2k+ wakeups/sec; UTIL_LOW_THRESHOLD keeps
++ * busy tasks (real work) out of the penalty path. Tune via sysctl.
++ */
++#define WAKEUP_PENALTY_THRESHOLD	2
++#define UTIL_LOW_THRESHOLD		76
+ 
+ static int __init setup_sched_thermal_decay_shift(char *str)
+ {
+@@ -6494,6 +6511,37 @@
+ 			update_zero = true;
+ 	}
+ 
++	if (unlikely(sysctl_sched_burst_penalty_enable &&
++	    se->avg.wakeup_avg > WAKEUP_PENALTY_THRESHOLD &&
++	    se->avg.util_avg < UTIL_LOW_THRESHOLD)) {
++		bool do_punish = true;
++		if (entity_is_task(se)) {
++			struct task_struct *p = task_of(se);
++			if (unlikely(sysctl_sched_burst_penalty_nice_strict && task_nice(p) < 0))
++				do_punish = false;
++		} else {
++			do_punish = false;
++		}
++		if (do_punish) {
++			se->wakeup_penalty_count++;
++			if (unlikely(sysctl_sched_burst_penalty_relief > 0 &&
++			    se->wakeup_penalty_count >= sysctl_sched_burst_penalty_relief)) {
++				se->wakeup_penalty_count = 0;
++				if (lag > 0)
++					lag += lag / 10;
++				if (se->vlag > 0)
++					se->vlag += se->vlag / 10;
++			} else {
++				if (lag > 0)
++					lag -= lag / 3;
++				if (se->vlag > 0)
++					se->vlag -= se->vlag / 3;
++			}
++		}
++	} else {
++		se->wakeup_penalty_count = 0;
++	}
++
+ 	se->vruntime = vruntime - lag;
+ 
+ 	if (update_zero)
+@@ -6512,6 +6560,10 @@
+ 	 */
+ 	if (sched_feat(PLACE_DEADLINE_INITIAL) && (flags & ENQUEUE_INITIAL))
+ 		vslice /= 2;
++
++	if (flags & ENQUEUE_WAKEUP) {
++		se->avg.wakeup_sum += 1024;
++	}
+ 
+ 	/*
+ 	 * EEVDF: vd_i = ve_i + r_i/w_i
+diff --git a/kernel/sched/pelt.c b/kernel/sched/pelt.c
+index 779eb58a4261..1c4e08fcab68 100644
+--- a/kernel/sched/pelt.c
++++ b/kernel/sched/pelt.c
+@@ -117,6 +117,7 @@
+ 		sa->runnable_sum =
+ 			decay_load(sa->runnable_sum, periods);
+ 		sa->util_sum = decay_load((u64)(sa->util_sum), periods);
++		sa->wakeup_sum = decay_load((u64)(sa->wakeup_sum), periods);
+ 
+ 		/*
+ 		 * Step 2
+@@ -265,6 +266,7 @@
+ 	sa->load_avg = div_u64(load * sa->load_sum, divider);
+ 	sa->runnable_avg = div_u64(sa->runnable_sum, divider);
+ 	WRITE_ONCE(sa->util_avg, sa->util_sum / divider);
++	WRITE_ONCE(sa->wakeup_avg, sa->wakeup_sum / divider);
+ }
+ 
+ /*
+diff --git a/kernel/sysctl.c b/kernel/sysctl.c
+index 38597f26b34c..6bcbf657023d 100644
+--- a/kernel/sysctl.c
++++ b/kernel/sysctl.c
+@@ -30,6 +30,10 @@
+ EXPORT_SYMBOL_GPL(sysctl_long_vals);
+ 
+ #if defined(CONFIG_SYSCTL)
++
++extern unsigned int sysctl_sched_burst_penalty_enable;
++extern unsigned int sysctl_sched_burst_penalty_nice_strict;
++extern unsigned int sysctl_sched_burst_penalty_relief;
+ 
+ /* Constants used for minimum and maximum */
+ static const int ngroups_max = NGROUPS_MAX;
+@@ -1441,6 +1445,33 @@
+ 		.proc_handler	= proc_dointvec,
+ 	},
+ #endif
++	{
++		.procname	= "sched_burst_penalty_enable",
++		.data		= &sysctl_sched_burst_penalty_enable,
++		.maxlen		= sizeof(unsigned int),
++		.mode		= 0644,
++		.proc_handler	= proc_dointvec_minmax,
++		.extra1		= SYSCTL_ZERO,
++		.extra2		= SYSCTL_ONE,
++	},
++	{
++		.procname	= "sched_burst_penalty_nice_strict",
++		.data		= &sysctl_sched_burst_penalty_nice_strict,
++		.maxlen		= sizeof(unsigned int),
++		.mode		= 0644,
++		.proc_handler	= proc_dointvec_minmax,
++		.extra1         = SYSCTL_ZERO,
++		.extra2         = SYSCTL_ONE,
++	},
++	{
++		.procname	= "sched_burst_penalty_relief",
++		.data		= &sysctl_sched_burst_penalty_relief,
++		.maxlen		= sizeof(unsigned int),
++		.mode		= 0644,
++		.proc_handler	= proc_dointvec_minmax,
++		.extra1         = SYSCTL_ZERO,
++		.extra2		= SYSCTL_ONE_HUNDRED,
++	},
+ };
+ 
+ int __init sysctl_init_bases(void)

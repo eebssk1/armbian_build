@@ -1,0 +1,49 @@
+diff --git a/net/ipv4/tcp_input.c b/net/ipv4/tcp_input.c
+index 93e93ad015d7..745ec289826c 100644
+--- a/net/ipv4/tcp_input.c
++++ b/net/ipv4/tcp_input.c
+@@ -4272,6 +4272,35 @@
+ 	}
+ }
+ 
++static void tcp_check_local_cc(struct sock *sk)
++{
++    struct tcp_sock *tp = tcp_sk(sk);
++    const struct inet_connection_sock *icsk = inet_csk(sk);
++    const struct dst_entry *dst;
++    u32 min_rtt;
++
++    if (likely(READ_ONCE(tp->delivered) > 16))
++        return;
++
++    min_rtt = tcp_min_rtt(tp);
++
++    if (unlikely(min_rtt == 0))
++        return;
++
++    if (unlikely(icsk->icsk_ca_setsockopt))
++        return;
++
++    dst = __sk_dst_get(sk);
++    if (dst && dst_metric(dst, RTAX_CC_ALGO))
++        return;
++
++    if (unlikely(min_rtt <= 750)) {
++        if (unlikely(strncmp(icsk->icsk_ca_ops->name, "highspeed", 9) != 0)) {
++            tcp_set_congestion_control(sk, "highspeed", false, true);
++        }
++    }
++}
++
+ /* This routine deals with incoming acks, but not outgoing ones. */
+ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
+ {
+@@ -4399,6 +4428,8 @@
+ 	/* See if we can take anything off of the retransmit queue. */
+ 	flag |= tcp_clean_rtx_queue(sk, skb, prior_fack, prior_snd_una,
+ 				    &sack_state, flag & FLAG_ECE);
++
++	tcp_check_local_cc(sk);
+ 
+ 	tcp_rack_update_reo_wnd(sk, &rs);
+ 

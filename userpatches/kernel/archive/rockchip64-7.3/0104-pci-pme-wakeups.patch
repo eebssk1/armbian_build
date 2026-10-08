@@ -1,0 +1,26 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arjan van de Ven <arjan@linux.intel.com>
+Date: Mon, 14 Mar 2016 11:10:58 -0600
+Subject: [PATCH] pci pme wakeups
+
+Reduce wakeups for PME checks, which are a workaround for miswired
+boards (sadly, too many of them) in laptops.
+---
+ drivers/pci/pci.c | 2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/drivers/pci/pci.c b/drivers/pci/pci.c
+index 8cc6a89130b5..e658e539c011 100644
+--- a/drivers/pci/pci.c
++++ b/drivers/pci/pci.c
+@@ -65,7 +65,7 @@
+ 	struct pci_dev *dev;
+ };
+ 
+-#define PME_TIMEOUT 1000 /* How long between PME checks */
++#define PME_TIMEOUT 3500 /* How long between PME checks */
+ 
+ /*
+  * Following exit from Conventional Reset, devices must be ready within 1 sec
+-- 
+https://clearlinux.org

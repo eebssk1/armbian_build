@@ -1,0 +1,26 @@
+From c87dfa48f6162e782aa44cfc691d722b525c3693 Mon Sep 17 00:00:00 2001
+From: Alexandre Frade <kernel@xanmod.org>
+Date: Thu, 11 May 2023 19:41:41 +0000
+Subject: [PATCH 06/18] XANMOD: fair: Set scheduler tunable latencies to
+ unscaled
+
+Signed-off-by: Alexandre Frade <kernel@xanmod.org>
+---
+ kernel/sched/fair.c | 2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+index 2d87d64763a3..fc15debc609d 100644
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -72,7 +72,7 @@
+  *
+  * (default SCHED_TUNABLESCALING_LOG = *(1+ilog(ncpus))
+  */
+-unsigned int sysctl_sched_tunable_scaling = SCHED_TUNABLESCALING_LOG;
++unsigned int sysctl_sched_tunable_scaling = SCHED_TUNABLESCALING_NONE;
+ 
+ /*
+  * Default base time slice (request size r_i) for SCHED_NORMAL/SCHED_BATCH:
+-- 
+2.47.3

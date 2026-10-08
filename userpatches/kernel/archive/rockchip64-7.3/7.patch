@@ -1,0 +1,24 @@
+diff --git a/kernel/locking/rwsem.c b/kernel/locking/rwsem.c
+index b9c180ac1eee..9741b8bb8a80 100644
+--- a/kernel/locking/rwsem.c
++++ b/kernel/locking/rwsem.c
+@@ -770,6 +770,7 @@
+ 	struct task_struct *new, *owner;
+ 	unsigned long flags, new_flags;
+ 	enum owner_state state;
++	u16 i = 0;
+ 
+ 	lockdep_assert_preemption_disabled();
+ 
+@@ -806,7 +807,10 @@
+ 			break;
+ 		}
+ 
+-		cpu_relax();
++		if (++i >= 3) {
++			i = 0;
++			cpu_relax();
++		}
+ 	}
+ 
+ 	return state;

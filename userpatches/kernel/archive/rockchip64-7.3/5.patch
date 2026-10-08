@@ -1,0 +1,151 @@
+diff --git a/drivers/char/hw_random/core.c b/drivers/char/hw_random/core.c
+index 57eeefe90da9..e1a1413858ff 100644
+--- a/drivers/char/hw_random/core.c
++++ b/drivers/char/hw_random/core.c
+@@ -23,6 +23,7 @@
+ #include <linux/notifier.h>
+ #include <linux/random.h>
+ #include <linux/rcupdate.h>
++#include <uapi/linux/sched/types.h>
+ #include <linux/sched.h>
+ #include <linux/sched/signal.h>
+ #include <linux/slab.h>
+@@ -301,6 +302,11 @@
+ 			err = -ERESTARTSYS;
+ 			goto out;
+ 		}
++		if (hwrng_fill) {
++			struct sched_param sp = { .sched_priority = 0 };
++			sched_setscheduler_nocheck(hwrng_fill, SCHED_BATCH, &sp);
++			set_user_nice(hwrng_fill, 1);
++		}
+ 	}
+ out:
+ 	memzero_explicit(buffer, sizeof(buffer));
+diff --git a/kernel/rcu/tree.c b/kernel/rcu/tree.c
+index 96848fc1f02b..e5087b013b4d 100644
+--- a/kernel/rcu/tree.c
++++ b/kernel/rcu/tree.c
+@@ -4666,6 +4666,8 @@
+ 	if (kthread_prio) {
+ 		sp.sched_priority = kthread_prio;
+ 		sched_setscheduler_nocheck(t, SCHED_FIFO, &sp);
++	} else {
++		set_user_nice(t, -1);
+ 	}
+ 	rnp = rcu_get_root();
+ 	raw_spin_lock_irqsave_rcu_node(rnp, flags);
+diff --git a/kernel/rcu/tree_nocb.h b/kernel/rcu/tree_nocb.h
+index 19bb42672baf..ac6260dcfc3a 100644
+--- a/kernel/rcu/tree_nocb.h
++++ b/kernel/rcu/tree_nocb.h
+@@ -1457,6 +1457,8 @@
+ 		WRITE_ONCE(rdp_gp->nocb_gp_kthread, t);
+ 		if (kthread_prio)
+ 			sched_setscheduler_nocheck(t, SCHED_FIFO, &sp);
++		else
++			set_user_nice(t, -1);
+ 	}
+ 	mutex_unlock(&rdp_gp->nocb_gp_kthread_mutex);
+ 
+@@ -1473,6 +1475,8 @@
+ 
+ 	if (IS_ENABLED(CONFIG_RCU_NOCB_CPU_CB_BOOST) && kthread_prio)
+ 		sched_setscheduler_nocheck(t, SCHED_FIFO, &sp);
++	if (!kthread_prio)
++		set_user_nice(t, -1);
+ 
+ 	WRITE_ONCE(rdp->nocb_cb_kthread, t);
+ 	WRITE_ONCE(rdp->nocb_gp_kthread, rdp_gp->nocb_gp_kthread);
+diff --git a/kernel/softirq.c b/kernel/softirq.c
+index 5d02c36c40e3..7226ebe9b914 100644
+--- a/kernel/softirq.c
++++ b/kernel/softirq.c
+@@ -30,6 +30,9 @@
+ #include <linux/wait_bit.h>
+ #include <linux/workqueue.h>
+ 
++#include <uapi/linux/sched/types.h>
++#include <linux/sched.h>
++
+ #include <asm/softirq_stack.h>
+ 
+ #define CREATE_TRACE_POINTS
+@@ -1136,11 +1139,20 @@
+ #define takeover_tasklets	NULL
+ #endif /* CONFIG_HOTPLUG_CPU */
+ 
++
++static inline void setsched(unsigned int cpu) {
++	struct task_struct *tsk = per_cpu(ksoftirqd, cpu);
++	/*struct sched_param sp = { .sched_priority = 0 };*/
++   /*sched_setscheduler_nocheck(tsk, SCHED_NORMAL, &sp);*/
++	set_user_nice(tsk, -1);
++}
++
+ static struct smp_hotplug_thread softirq_threads = {
+ 	.store			= &ksoftirqd,
+ 	.thread_should_run	= ksoftirqd_should_run,
+ 	.thread_fn		= run_ksoftirqd,
+ 	.thread_comm		= "ksoftirqd/%u",
++	.create			= setsched,
+ };
+ 
+ #ifdef CONFIG_IRQ_FORCED_THREADING
+diff --git a/mm/compaction.c b/mm/compaction.c
+index a049415512c6..91e2790bf9a6 100644
+--- a/mm/compaction.c
++++ b/mm/compaction.c
+@@ -3276,6 +3276,11 @@
+ 		pgdat->kcompactd = NULL;
+ 	} else {
+ 		wake_up_process(pgdat->kcompactd);
++	}
++	if (pgdat->kcompactd) {
++               struct sched_param sp = { .sched_priority = 0 };
++               sched_setscheduler_nocheck(pgdat->kcompactd, SCHED_BATCH, &sp);
++		set_user_nice(pgdat->kcompactd, 2);
+ 	}
+ }
+ 
+diff --git a/mm/ksm.c b/mm/ksm.c
+index 49d48d1e0998..5b7936650f29 100644
+--- a/mm/ksm.c
++++ b/mm/ksm.c
+@@ -2838,7 +2838,9 @@
+ 	unsigned int sleep_ms;
+ 
+ 	set_freezable();
+-	set_user_nice(current, 5);
++	struct sched_param sp = { .sched_priority = 0 };
++	sched_setscheduler_nocheck(current, SCHED_BATCH, &sp);
++	set_user_nice(current, 3);
+ 
+ 	while (!kthread_should_stop()) {
+ 		mutex_lock(&ksm_thread_mutex);
+diff --git a/mm/vmscan.c b/mm/vmscan.c
+index 20a5fb44b596..e185dd60ff3a 100644
+--- a/mm/vmscan.c
++++ b/mm/vmscan.c
+@@ -65,6 +65,9 @@
+ 
+ #include <linux/swapops.h>
+ #include <linux/sched/sysctl.h>
++
++#include <uapi/linux/sched/types.h>
++#include <linux/sched.h>
+ 
+ #include "internal.h"
+ #include "page_alloc.h"
+@@ -7846,6 +7849,11 @@
+ 		} else {
+ 			wake_up_process(pgdat->kswapd);
+ 		}
++		if (pgdat->kswapd) {
++			struct sched_param sp = { .sched_priority = 0 };
++			sched_setscheduler_nocheck(pgdat->kswapd, SCHED_BATCH, &sp);
++			set_user_nice(pgdat->kswapd, -1);
++		}
+ 	}
+ 	pgdat_kswapd_unlock(pgdat);
+ }
