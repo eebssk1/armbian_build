@@ -235,6 +235,11 @@ function do_main_configuration() {
 			declare -g -r MAINLINE_KERNEL_SOURCE='https://mirrors.bfsu.edu.cn/git/linux-stable.git'
 			declare -g -r MAINLINE_FIRMWARE_SOURCE='https://mirrors.bfsu.edu.cn/git/linux-firmware.git'
 			;;
+		github)
+			# Greg Kroah-Hartman's mirror of the stable tree; firmware stays on kernel.org
+			declare -g -r MAINLINE_KERNEL_SOURCE='https://github.com/gregkh/linux.git'
+			declare -g -r MAINLINE_FIRMWARE_SOURCE='https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git'
+			;;
 		gitverse)
 			declare -g -r MAINLINE_KERNEL_SOURCE='https://gitverse.ru/pbs-sunflower/linux-stable.git'
 			declare -g -r MAINLINE_FIRMWARE_SOURCE='https://gitverse.ru/pbs-sunflower/linux-firmware.git'
@@ -287,18 +292,28 @@ function do_main_configuration() {
 			;;
 	esac
 
+	# OCI storage for artifacts (OCI_PATH) and git trees (OCI_GIT_PATH).
+	declare -g OCI_SERVER="${OCI_SERVER:-"ghcr.io"}"
+	declare -g OCI_PATH="${OCI_PATH:-"armbian/os"}"
+	declare -g OCI_GIT_PATH="${OCI_GIT_PATH:-"armbian/shallow"}"
+
+	# OCI_PROXY: optional read-only cache of OCI_SERVER (host[:port]). Never used for uploads.
+	# GHCR_MIRROR selects a public ghcr.io mirror as OCI_PROXY.
 	case $GHCR_MIRROR in
 		dockerproxy)
-			GHCR_MIRROR_ADDRESS="${GHCR_MIRROR_ADDRESS:-"ghcr.dockerproxy.net"}"
-			declare -g -r GHCR_SOURCE=$GHCR_MIRROR_ADDRESS
+			OCI_PROXY="${OCI_PROXY:-"${GHCR_MIRROR_ADDRESS:-"ghcr.dockerproxy.net"}"}"
 			;;
 		nju)
-			declare -g -r GHCR_SOURCE='ghcr.nju.edu.cn'
-			;;
-		*)
-			declare -g -r GHCR_SOURCE='ghcr.io'
+			OCI_PROXY="${OCI_PROXY:-"ghcr.nju.edu.cn"}"
 			;;
 	esac
+	declare -g OCI_PROXY="${OCI_PROXY:-}"
+
+	# Deprecated overrides: OCI_TARGET_BASE, GIT_ORAS_TARBALLS_SHALLOW_BASE_REF.
+	declare -g GIT_ORAS_TARBALLS_SHALLOW_BASE_REF="${GIT_ORAS_TARBALLS_SHALLOW_BASE_REF:-"${OCI_SERVER}/${OCI_GIT_PATH}"}"
+
+	# Deprecated. Kept for extensions and userpatches.
+	declare -g -r GHCR_SOURCE="${OCI_PROXY:-"${OCI_SERVER}"}"
 
 	# Let's set default data if not defined in board configuration above
 	[[ -z $OFFSET ]] && OFFSET=4 # offset to 1st partition (we use 4MiB boundaries by default)
@@ -350,10 +365,6 @@ function do_main_configuration() {
 			display_alert "NETWORKING_STACK=${NETWORKING_STACK}" "Invalid value? Not adding networking extensions" "wrn"
 			;;
 	esac
-
-	# enable APA extension for Debian Unstable release
-	# loong64 is not supported now
-	#  [ "$RELEASE" = "sid" ] && [ "$ARCH" != "loong64" ] && enable_extension "apa"
 
 	## Extensions: at this point we've sourced all the config files that will be used,
 	##             and (hopefully) not yet invoked any extension methods. So this is the perfect
