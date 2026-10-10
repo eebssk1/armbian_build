@@ -75,9 +75,9 @@ jobs:
           tag_name: ${{ env.VER }}
       - name: compress img
         run: |
-          for a in output/images/*
+          for a in output/images/*.img
           do
-          sudo xz -8 $a
+          [ -e $a ] && sudo xz -8 $a
           done
       - name: release
         uses: ncipollo/release-action@v1.16.0
