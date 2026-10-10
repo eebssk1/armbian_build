@@ -5,7 +5,7 @@
 	fragment@0 {
 		target = <&fan>;
 		__overlay__ {
-			cooling-levels = <180 195 215 235 255>;
+			cooling-levels = <0 160 185 215 255>;
 			pwms = <&pwm2 0 40000 0>;
 		};
 	};
