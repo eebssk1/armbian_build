@@ -21,6 +21,9 @@ ubuntu-*-cloudimg-console.log
 !/userpatches/
 /userpatches/*
 !/userpatches/config-firmware-overrides.conf
+!/userpatches/config-mybuild.conf
+!/userpatches/mybuild/
+/userpatches/private/
 
 ### General annoyances ###
 .DS_Store

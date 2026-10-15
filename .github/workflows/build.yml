@@ -8,6 +8,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Prepare first boot
+        id: first_boot
+        env:
+          ROOT_PASSWORD: ${{ secrets.ROOT_PASSWORD }}
+          USER_NAME: ${{ secrets.USER_NAME }}
+          USER_PASSWORD: ${{ secrets.USER_PASSWORD }}
+          WIFI_SSID: ${{ secrets.WIFI_SSID }}
+          WIFI_PASSWORD: ${{ secrets.WIFI_PASSWORD }}
+          IMAGE_PASSWORD: ${{ secrets.IMAGE_PASSWORD }}
+        run: python3 .github/scripts/prepare-mybuild.py
       - name: Clean UP
         run: sudo ./cleanga.sh
       - name: Work around Azure issues
@@ -16,7 +26,7 @@ jobs:
         run: |
           sudo apt-get -y dist-upgrade --autoremove --purge --ignore-missing -o APT::Get::Fix-Broken=false
           sudo pip3 uninstall -y pylibfdt || true
-          sudo apt-get install -y swig libfdt-dev
+          sudo apt-get install -y swig libfdt-dev 7zip
       - name: update fdt
         if: false
         run: |
@@ -47,7 +57,30 @@ jobs:
           export CCACHE_COMPRESSLEVEL=2
           hash -r
           export KERNEL_EXTRA_CFLAGS='-fipa-pta -D__1ENABLE_AGGRESSIVE_GRAPHITE9__'
-          ./compile.sh firmware-overrides PREFER_DOCKER=no USE_CCACHE=yes BOARD=orangepi5pro BRANCH=edge BUILD_DESKTOP=no BUILD_MINIMAL=yes EXPERT=yes RELEASE=trixie NETWORKING_STACK=network-manager ATF_COMPILE=yes ARTIFACT_IGNORE_CACHE="yes" DOWNLOAD_MIRROR="china" NAMESERVER="223.5.5.5" KERNEL_KEEP_CONFIG=yes CLEAN_LEVEL="make,images,alldebs,oldcache" KERNEL_CONFIGURE=no
+          ./compile.sh mybuild PREFER_DOCKER=no USE_CCACHE=yes BOARD=orangepi5pro BRANCH=edge BUILD_DESKTOP=no BUILD_MINIMAL=yes EXPERT=yes RELEASE=trixie NETWORKING_STACK=network-manager COMPRESS_OUTPUTIMAGE=sha,img ATF_COMPILE=yes ARTIFACT_IGNORE_CACHE="yes" DOWNLOAD_MIRROR="china" NAMESERVER="223.5.5.5" KERNEL_KEEP_CONFIG=yes CLEAN_LEVEL="make,images,alldebs,oldcache" KERNEL_CONFIGURE=no
+      - name: Encrypt images
+        if: steps.first_boot.outputs.image_format == '7z'
+        env:
+          IMAGE_PASSWORD: ${{ secrets.IMAGE_PASSWORD }}
+        run: sudo --preserve-env=IMAGE_PASSWORD bash .github/scripts/encrypt-images.sh
+      - name: Compress standard images
+        if: steps.first_boot.outputs.image_format == 'xz'
+        run: |
+          sudo bash -euo pipefail <<'BASH'
+          cd output/images
+          shopt -s nullglob
+          images=(*.img)
+          if ((${#images[@]} == 0)); then
+            printf '%s\n' 'No raw images found' >&2
+            exit 1
+          fi
+          for image in "${images[@]}"; do
+            xz --keep -8 -- "$image"
+            xz --test -- "${image}.xz"
+            sha256sum -- "${image}.xz" > "${image}.xz.sha256"
+            rm -- "$image"
+          done
+          BASH
       - name: commit compare
         id: cc
         continue-on-error: true
@@ -73,17 +106,15 @@ jobs:
         with:
           delete_release: true
           tag_name: ${{ env.VER }}
-      - name: compress img
-        run: |
-          for a in output/images/*.img
-          do
-          [ -e $a ] && sudo xz -8 $a
-          done
       - name: release
         uses: ncipollo/release-action@v1.16.0
         with:
           allowUpdates: true
-          artifacts: "output/debs/*.deb,output/images/*"
+          artifacts: "output/debs/*.deb,output/images/*.img.${{ steps.first_boot.outputs.image_format }},output/images/*.img.${{ steps.first_boot.outputs.image_format }}.sha256"
+          artifactErrorsFailBuild: true
           makeLatest: true
           omitBodyDuringUpdate: true
           tag: ${{ env.VER }}
+      - name: Remove first boot secrets
+        if: always()
+        run: rm -rf -- userpatches/private/mybuild
