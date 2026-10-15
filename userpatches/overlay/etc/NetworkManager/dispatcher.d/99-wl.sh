@@ -14,10 +14,10 @@ exit 0
 esac
 
 #iwconfig $DEVICE_IP_IFACE txpower 27dbm
-iwconfig $DEVICE_IP_IFACE retry short 10
-iwconfig $DEVICE_IP_IFACE retry long 7
-iwconfig $DEVICE_IP_IFACE rts 400
-iwconfig $DEVICE_IP_IFACE frag 960
+iwconfig $DEVICE_IP_IFACE retry short 9
+iwconfig $DEVICE_IP_IFACE retry long 8
+iwconfig $DEVICE_IP_IFACE rts 560
+iwconfig $DEVICE_IP_IFACE frag 1280
 iwconfig $DEVICE_IP_IFACE commit
 ip link set dev $DEVICE_IP_IFACE mode default
 ip link set dev $DEVICE_IP_IFACE qlen 3200

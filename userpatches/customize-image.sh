@@ -19,7 +19,7 @@ BUILD_DESKTOP=$4
 
 Main() {
 	apt update
-	apt-get install -y wireless-tools util-linux-extra linux-cpupower lm-sensors file locate \
+	apt-get install -y wireless-tools util-linux-extra linux-cpupower lm-sensors file locate acl \
 		ack python-is-python3 apt-utils dialog bash-completion tmux polkitd pkexec libncurses6 libncursesw6 pciutils \
 		dbus libgl1-mesa-dri mesa-vulkan-drivers libgbm1 mesa-utils-extra vulkan-tools
 	apt-get install -y --no-install-recommends linux-libc-dev libc6-dev
