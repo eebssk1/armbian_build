@@ -5,19 +5,19 @@
  	.reg_rules = {
  		/* IEEE 802.11b/g, channels 1..11 */
 -		REG_RULE(2412-10, 2472+10, 40, 6, 20, 0),
-+		REG_RULE(2412-10, 2472+10, 40, 6, 30, 0),
++		REG_RULE(2412-10, 2472+10, 40, 6, 31, 0),
  		/* If any */
  		/* IEEE 802.11 channel 14 - Only JP enables
  		 * this and for 802.11b only
  		 */
 -		REG_RULE(2484-10, 2484+10, 20, 6, 20, 0),
-+		REG_RULE(2484-10, 2484+10, 20, 6, 30, 0),
++		REG_RULE(2484-10, 2484+10, 20, 6, 31, 0),
  		/* IEEE 802.11a, channel 36..64 */
 -		REG_RULE(5150-10, 5350+10, 160, 6, 20, 0),
-+		REG_RULE(5150-10, 5350+10, 160, 6, 30, NL80211_RRF_AUTO_BW),
++		REG_RULE(5150-10, 5350+10, 160, 6, 31, NL80211_RRF_AUTO_BW),
  		/* IEEE 802.11a, channel 100..165 */
 -		REG_RULE(5470-10, 5850+10, 160, 6, 20, 0), }
-+		REG_RULE(5470-10, 5850+10, 160, 6, 30, NL80211_RRF_AUTO_BW), }
++		REG_RULE(5470-10, 5850+10, 160, 6, 31, NL80211_RRF_AUTO_BW), }
  };
  
  /* Note: brcmf_cipher_suites is an array of int defining which cipher suites
