@@ -21,7 +21,18 @@
  };
  
  /* Note: brcmf_cipher_suites is an array of int defining which cipher suites
-@@ -8289,6 +8289,8 @@
+@@ -8268,6 +8268,10 @@
+ 	s32 err;
+ 	int i;
+ 
++	/* Ignore AP country hints; keep explicit country requests. */
++	if (req->initiator == NL80211_REGDOM_SET_BY_COUNTRY_IE)
++		return;
++
+ 	/* The country code gets set to "00" by default at boot, ignore */
+ 	if (req->alpha2[0] == '0' && req->alpha2[1] == '0')
+ 		return;
+@@ -8289,6 +8293,8 @@
  		return;
  	}
  
@@ -30,7 +41,7 @@
  	err = brcmf_translate_country_code(ifp->drvr, req->alpha2, &ccreq);
  	if (err)
  		return;
-@@ -8298,6 +8300,9 @@
+@@ -8298,6 +8304,9 @@
  		bphy_err(drvr, "Firmware rejected country setting\n");
  		return;
  	}
@@ -40,3 +51,12 @@
  	brcmf_setup_wiphybands(cfg);
  }
  
+@@ -8395,6 +8404,7 @@
+ 	brcmf_dbg(INFO, "Registering custom regulatory\n");
+ 	wiphy->reg_notifier = brcmf_cfg80211_reg_notifier;
+-	wiphy->regulatory_flags |= REGULATORY_CUSTOM_REG;
++	wiphy->regulatory_flags |= REGULATORY_CUSTOM_REG |
++				   REGULATORY_COUNTRY_IE_IGNORE;
+ 	wiphy_apply_custom_regulatory(wiphy, &brcmf_regdom);
+ 
+ 	/* firmware defaults to 40MHz disabled in 2G band. We signal
