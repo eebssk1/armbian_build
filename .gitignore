@@ -24,6 +24,9 @@ ubuntu-*-cloudimg-console.log
 !/userpatches/config-mybuild.conf
 !/userpatches/mybuild/
 /userpatches/private/
+!/userpatches/kernel/
+/userpatches/kernel/*
+!/userpatches/kernel/README.md
 
 ### General annoyances ###
 .DS_Store

@@ -1,0 +1,462 @@
+U:bcm43456 5ghz disabled in china
+A:If your Broadcom BCM43456 Wi-Fi chip (commonly found in devices like the Raspberry Pi 4 or Raspberry Pi 400) is failing to detect or connect to 5GHz Wi-Fi networks when the regulatory country code is set to China (https://www.google.com/search?kgmid=%2Fm%2F0d05w3) (CN), the issue is caused by a restrictive conflict within the brcmfmac firmware or the local wireless domain configurations. [1] (https://github.com/raspberrypi/firmware/issues/1246), [2] (https://github.com/raspberrypi/firmware/issues/1359)
+
+Why This Happens
+
+China utilizes specific subsets of the 5GHz spectrum. In older regulatory tables or certain clm_blob (Country Locale Matrix) firmware files associated with Broadcom chips, setting the region to CN defaults to restrictive channel profiles. Often, the firmware either: [1] (https://silexamerica.my.site.com/s/article/Understanding-Wireless-Regulations-in-China), [2] (https://blog.csdn.net/weixin_26886855/article/details/166344785), [3] (https://github.com/raspberrypi/firmware/issues/1359)
+1. Disables 5GHz entirely due to a fallback misconfiguration (DFS-UNSET).
+2. Restricts 5GHz scanning strictly to channels 149 and above (5745–5825 MHz), completely ignoring lower 5GHz bands like channels 36–64 (5150–5350 MHz) even though Chinese regulations technically permit them. [1] (https://forums.raspberrypi.com/viewtopic.php?t=389452), [2] (https://silexamerica.my.site.com/s/article/Understanding-Wireless-Regulations-in-China), [3] (https://github.com/raspberrypi/firmware/issues/1359)
+
+How to Fix It
+
+
+1. Shift Your Router's 5GHz Channel
+
+If you want to keep your device set to the CN regulatory domain, log into your Wi-Fi router's admin panel and manually switch your 5GHz channel to a higher index permitted by China's wireless table: [1] (https://github.com/raspberrypi/firmware/issues/1246)
+• Supported Chinese 5GHz Channels: 149, 153, 157, 161, or 165 [1] (https://github.com/raspberrypi/firmware/issues/1246)
+
+2. Set an Overriding Regulatory Country Code
+
+If your router is outputting on lower 5GHz bands and you cannot change its channels, you can set your operating system's wireless region to a territory with overlapping or broader 5GHz channel mappings (such as the US or a global profile) to force the driver to look for those frequencies. [1] (https://forums.raspberrypi.com/viewtopic.php?t=388494)
+• Temporary change (Linux / Raspberry Pi CLI):bash
+sudo iw reg set US
+Use code with caution.
+• Permanent change (Raspberry Pi OS):
+Run sudo raspi-config, navigate to Localisation Options -> WLAN Country, and adjust the territory from CN to US or GB. [1] (https://forums.raspberrypi.com/viewtopic.php?t=388494)
+
+3. Update Firmware and Regulatory Database Files
+
+If you are running an alternative Linux distribution (like OpenWrt, AlmaLinux, or Ubuntu Core), your operating system might lack the required signatures to decrypt or enforce local 5GHz domains. Installing or updating the full local wireless regulatory database will often solve this: [1] (https://www.reddit.com/r/AlmaLinux/comments/1mzmzf0/almalinux_10_on_raspberry_5_no_5ghz_band_cant_set/), [2] (https://forums.raspberrypi.com/viewtopic.php?t=389452), [3] (https://github.com/raspberrypi/firmware/issues/1246)
+bash
+# On Debian/Ubuntu/Raspberry Pi OS:
+sudo apt update && sudo apt install --reinstall wireless-regdb crda
+
+# On Fedora/RHEL/CentOS:
+sudo dnf reinstall wireless-regdb
+Use code with caution.
+Additionally, make sure you copy or update the matching brcmfmac43456-sdio.clm_blob and binary configurations into your /lib/firmware/brcm/ directory. The official Raspberry Pi Firmware GitHub Repository hosts updated files that correctly allow simultaneous 2.4GHz and 5GHz operations. [1] (https://discussion.fedoraproject.org/t/wifi-5ghz-not-showing-f40-broadcom/130537), [2] (https://github.com/AlmaLinux/raspberry-pi/issues/23), [3] (https://github.com/raspberrypi/firmware/issues/1359)
+To help pinpoint the issue, please share:
+• What operating system (e.g., Raspberry Pi OS, OpenWrt, Ubuntu) you are currently running.
+• What channel number your 5GHz Wi-Fi network uses.
+• The output of running iw dev wlan0 scan or iw reg get in your terminal.
+--
+U:armbian trunk
+I switched to us and it is showing.
+but after boot it is back at CN
+A:To stop Armbian from reverting your Wi-Fi country code back to CN after a reboot, you need to change the hardware NVRAM configuration file in /lib/firmware/brcm/, as the brcmfmac driver reads this file at boot and overrides your operating system settings.
+Here are the three places you need to update to make the US region permanent, ordered from the most likely culprit on Armbian to standard system configs:
+
+1. Edit the Broadcom NVRAM Text File (Most Likely Cause)
+
+On Armbian (especially on SBCs made by Chinese manufacturers like Orange Pi, Radxa, or NanoPi), the board's specific NVRAM calibration file usually has ccode=CN hardcoded into it. Every time the kernel loads the brcmfmac module at boot, it forces the chip into the CN region.
+1. Find the active NVRAM .txt file in the Broadcom firmware folder:bash
+grep -rn "ccode=" /lib/firmware/brcm/ /lib/firmware/updates/brcm/ 2>/dev/null
+Use code with caution.
+(Look for files named brcmfmac43456-sdio.txt or brcmfmac43456-sdio.<board-name>.txt.)
+2. Open the matching file(s) with a text editor:bash
+sudo nano /lib/firmware/brcm/brcmfmac43456-sdio.txt
+Use code with caution.
+(If there is a board-specific file like brcmfmac43456-sdio.radxa,zero3.txt, edit that one too).
+3. Change the country code lines inside the file:
+	• Find ccode=CN (or ccode=ALL / ccode=0) and change it to:ini
+ccode=US
+Use code with caution.
+	• Find regrev= and ensure it is set to 0:ini
+regrev=0
+Use code with caution.
+4. Save and exit (Ctrl+O, Enter, Ctrl+X).
+
+2. Lock the Kernel Regulatory Domain
+
+Modern kernels used in Armbian Trunk pass the regulatory domain directly via the cfg80211 kernel module.
+1. Create or edit a module configuration file:bash
+echo "options cfg80211 ieee80211_regdom=US" | sudo tee /etc/modprobe.d/cfg80211.conf
+Use code with caution.
+2. Check legacy CRDA config (if present on your Debian/Ubuntu base):
+If the file /etc/default/crda exists, open it (sudo nano /etc/default/crda) and ensure it says REGDOMAIN=US.
+3. Update the initramfs so the setting applies early in the boot process:bash
+sudo update-initramfs -u
+Use code with caution.
+
+3. Check wpa_supplicant Overrides
+
+If you previously configured Wi-Fi via armbian-config or manually, wpa_supplicant might have saved country=CN in its config and is pushing it to the driver when NetworkManager initializes.
+1. Check if any wpa_supplicant file has a country code set:bash
+sudo grep -rn "country=" /etc/wpa_supplicant/ /etc/NetworkManager/ 2>/dev/null
+Use code with caution.
+2. If you find a file containing country=CN, open it and change it to country=US.
+
+Test the Fix
+
+Reboot your board (sudo reboot) and run:
+bash
+iw reg get
+Use code with caution.
+It should now persistently show country US: DFS-FCC across both global and phy#0.
+If it still resets after editing those files, let me know:
+• Which specific SBC/board you are using
+• Whether your router itself is broadcasting a CN country code (via 802.11d beacon frames, which can overwrite your client settings once connected)
+--
+U:root@orangepi5pro:~# cat /lib/firmware/brcm/brcmfmac43456-sdio.txt
+#AP6256_NVRAM_V1.1_08252017
+# Cloned from bcm94345wlpagb_p2xx.txt
+NVRAMRev=$Rev: 498373 $
+sromrev=11
+vendid=0x14e4
+devid=0x43ab
+manfid=0x2d0
+prodid=0x06e4
+macaddr=00:90:4c:c5:12:38
+nocrc=1
+boardtype=0x6e4
+boardrev=0x1304
+xtalfreq=37400
+#boardflags: 5GHz eTR switch by default
+#            2.4GHz eTR switch by default
+#            bit1 for btcoex
+boardflags=0x00480201
+boardflags2=0x40800000
+boardflags3=0x48200100
+#phycal_tempdelta=15
+rxchain=1
+txchain=1
+aa2g=1
+aa5g=1
+tssipos5g=1
+tssipos2g=1
+femctrl=0
+AvVmid_c0=0,157,1,126,1,126,1,126,1,126
+pa2ga0=-164,5427,-623
+pa2ga1=-165,3699,-515
+#pa5ga0=-146,5304,-612,-140,5341,-613,-166,5326,-633,-154,5272,-621
+#pa5ga0=-134,5385,-609,-132,5359,-605,-154,5360,-621,-140,5288,-604
+pa5ga0=-127,5380,-603,-130,5395,-608,-148,5369,-622,-147,5222,-608
+pa5ga1=-161,3544,-499,-166,3543,-497,-169,3569,-497,-171,3598,-498
+itrsw=1
+pdoffset2g40ma0=10
+pdoffset40ma0=0xaaaa
+pdoffset80ma0=0xaaaa
+extpagain5g=2
+extpagain2g=2
+tworangetssi2g=0
+tworangetssi5g=0
+# LTECX flags
+# WCI2
+ltecxmux=0
+ltecxpadnum=0x0504
+ltecxfnsel=0x22
+ltecxgcigpio=0x32
+
+pacalshift5g=0,0,3
+
+maxp2ga0=70
+cckbw202gpo=0x1000
+cckbw20ul2gpo=0x1000
+ofdmlrbw202gpo=0x0033
+dot11agofdmhrbw202gpo=0x2222
+mcsbw202gpo=0x99333322
+
+cckdigfilttype=5
+
+#maxp5ga0=82,82,82,82
+#mcsbw205glpo=0x99555000
+#mcsbw205gmpo=0x99555000
+#mcsbw205ghpo=0x99555000
+#mcsbw405glpo=0x99555000
+#mcsbw405gmpo=0x99555000
+#mcsbw405ghpo=0x99555000
+#mcsbw805glpo=0x99555000
+#mcsbw805gmpo=0x99555000
+#mcsbw805ghpo=0x99555000
+
+maxp5ga0=73,74,73,73
+mcsbw205glpo=0x8a875444
+mcsbw205gmpo=0x8a875444
+mcsbw205ghpo=0x8a875444
+
+mcsbw405glpo=0xda844333
+mcsbw405gmpo=0xdb844333
+mcsbw405ghpo=0xda844333
+
+mcsbw805glpo=0xdb555444
+mcsbw805gmpo=0xda555444
+mcsbw805ghpo=0xda555444
+
+
+swctrlmap_2g=0x00040004,0x00020002,0x00040004,0x010a02,0x1ff
+swctrlmap_5g=0x00100010,0x00200020,0x00200020,0x010a02,0x2f4
+swctrlmapext_5g=0x00000000,0x00000000,0x00000000,0x000000,0x3
+swctrlmapext_2g=0x00000000,0x00000000,0x00000000,0x000000,0x3
+
+vcodivmode=1
+deadman_to=481500000
+ed_thresh2g=-54
+ed_thresh5g=-54
+eu_edthresh2g=-54
+eu_edthresh5g=-54
+
+
+muxenab=0x10
+A:Your AP6256 NVRAM file is missing the ccode parameter entirely, which causes the Orange Pi 5 Pro firmware to default to its internal CN fallback at boot.
+
+1. Add the Country Code to NVRAM
+
+Append the US country code and regulatory revision to the bottom of your configuration file:
+bash
+cat <<EOF >> /lib/firmware/brcm/brcmfmac43456-sdio.txt
+ccode=US
+regrev=0
+EOF
+Use code with caution.
+
+2. Verify Board-Specific Symlinks
+
+Mainline Linux kernels look for a board-specific NVRAM filename first (brcmfmac43456-sdio.xunlong,orangepi-5-pro.txt). Check if a separate file exists for your board:
+bash
+ls -la /lib/firmware/brcm/brcmfmac43456*
+Use code with caution.
+• If it is a symlink (->) pointing to brcmfmac43456-sdio.txt, you are good to go.
+• If it is a separate file, add ccode=US and regrev=0 to the bottom of that file as well.
+
+3. Rebuild Initramfs & Reboot
+
+Armbian caches firmware inside the boot ramdisk. Update it so the changes apply on startup:
+bash
+update-initramfs -u
+reboot
+Use code with caution.
+After rebooting, does iw reg get hold the US region, or is there another file listed in ls -la /lib/firmware/brcm/brcmfmac43456*?
+--
+U:does not work. driver debug hook shows:
+[   18.290271] [     T89] Request regdom change  mode = CountryIE  where = SOURCE_INTERNAL_DB.
+[   18.290924] [     T89] Firmware current CCode is US
+[   18.294645] [     T89] Firmware changed  CCode to CN
+A:Your Wi-Fi chip is reverting to CN because your router (or a nearby access point) is broadcasting CountryIE (CN) via 802.11d beacon frames.
+Your debug log confirms that your NVRAM edit succeeded (Firmware current CCode is US), but at the 18-second mark, wpa_supplicant connects or scans, reads the CountryIE element from the airwaves (mode = CountryIE), and tells the kernel (cfg80211) to force the firmware back to CN.
+Because the Linux kernel trusts 802.11d country beacons by default, you can stop this override using one of the three fixes below.
+
+Method 1: Change the Router's Region or 802.11d Setting (Best Fix)
+
+If you have admin access to the Wi-Fi router you are connecting to:
+1. Log into your router's configuration page.
+2. Disable 802.11d (sometimes labeled World Mode or Country IE broadcasting), or change the router's wireless region from China to US / Australia.
+
+Method 2: Patch regulatory.db so CN Uses US Rules (No Recompile Needed)
+
+Since the kernel uses its internal database (where = SOURCE_INTERNAL_DB) to look up restrictions whenever it hears "CN", you can replace the restricted CN rules inside /lib/firmware/regulatory.db with US rules. Even when the chip switches to CN, the kernel will hand it the unrestricted US 5GHz channels.
+1. Install the regulatory database compiler (crda / python3-m2crypto) or use regdbdump:
+On Armbian, the simplest way to bypass a broken/restrictive CN entry or country IE switch without recompiling the kernel is to tell the Broadcom firmware that "CN" maps to "US" inside the driver's translation table (if using bcmdhd), or lock it via a NetworkManager dispatcher script.First, check if your driver is using bcmdhd with a config.txt file:bash
+find /lib/firmware/ -name "*config.txt"
+Use code with caution.
+
+	• If a config.txt file exists (common on Rockchip bcmdhd builds), add the country translation map to it:bash
+echo "ccode=US" >> /lib/firmware/config.txt
+echo "roam_off=1" >> /lib/firmware/config.txt
+Use code with caution.
+
+Method 3: Disable the Regulatory Notifier in the Driver / Hook It
+
+Since you mentioned you already have a driver debug hook active (which implies you are either compiling the module or using a live hook/kprobe), you can block the CountryIE request directly in the kernel module:
+• If you are compiling the driver (brcmfmac or bcmdhd):
+Open the regulatory notifier function (brcmf_cfg80211_reg_notifier in cfg80211.c or wl_cfg80211_reg_notifier in wl_cfg80211.c) and ignore NL80211_REGDOM_SET_BY_COUNTRY_IE:c
+if (request->initiator == NL80211_REGDOM_SET_BY_COUNTRY_IE)
+    return;
+Use code with caution.
+• If you are using a live hook (kprobe / ftrace / ebpf) or want a userspace override:
+Because NL80211_REGDOM_SET_BY_COUNTRY_IE only triggers when associating with an AP, you can create a NetworkManager dispatcher script that immediately forces US back the second the interface connects:bash
+cat << 'EOF' | sudo tee /etc/NetworkManager/dispatcher.d/99-force-us-regdom
+#!/bin/bash
+IFACE=$1
+ACTION=$2
+
+if [ "$IFACE" = "wlan0" ] && [ "$ACTION" = "up" ]; then
+    sleep 1
+    iw reg set US
+fi
+EOF
+sudo chmod +x /etc/NetworkManager/dispatcher.d/99-force-us-regdom
+Use code with caution.
+How did you set up the driver debug hook (are you building the kernel/module from source, or using a module parameter)? If you are building from source, share the driver name (lsmod | grep -E "brcm|dhd") and I can give you the exact C line to patch out CountryIE.
+--
+U:1.no such settings
+2.regulatory.db always patched,useless as driver not use it anyway.
+3. the patch is just user land notification,it does not alter firmware itself.and the script way is non-determinstic.
+A:To prevent the BCM43456 firmware itself from switching its internal country code to CN upon receiving 802.11d beacons, you must either disable internal autocountry (802.11d engine) inside the chip's firmware or patch the country IOVAR / CLM blob directly.
+Because FullMAC Broadcom chips (brcmfmac / bcmdhd) manage their own regulatory state inside the ARM Cortex-R4/M3 processor on the Wi-Fi module, standard Linux regulatory.db changes do not control the firmware's internal channel table. Instead, the driver sends the "country" IOVAR down the SDIO bus to the chip, or the chip's internal autocountry feature parses the 802.11d IE directly from incoming frames.
+Apply one of these three firmware-level fixes:
+
+1. Disable Firmware-Level 802.11d / Auto-Country via wl or IOVAR
+
+Broadcom firmware has internal IOVARs (autocountry and 11d) that tell the chip's microprocessor whether to adopt country codes from AP beacons on its own.
+• In your NVRAM file (/lib/firmware/brcm/brcmfmac43456-sdio.txt):
+Add these lines alongside ccode=US to tell the firmware state machine not to auto-switch:ini
+autocountry=0
+11d=0
+Use code with caution.
+• In the kernel driver (when initializing the chip):
+Send the IOVAR command down to the firmware during brcmf_cfg80211_attach (for brcmfmac) or dhd_preinit_ioctls (for bcmdhd):
+	• brcmfmac:c
+brcmf_fil_iovar_int_set(ifp, "autocountry", 0);
+brcmf_fil_bsscfg_int_set(ifp, "11d", 0);
+Use code with caution.
+	• bcmdhd:c
+dhd_wl_ioctl_set_intiovar(dhd, "autocountry", 0, WLC_SET_VAR, TRUE, 0);
+Use code with caution.
+
+2. Hardcode "US" in the Driver's Firmware IOVAR Call
+
+Even when the request starts as a user-land/cfg80211 notification (Request regdom change mode = CountryIE), the driver translates that notification into a firmware IOVAR command ("country" / WLC_SET_COUNTRY) that physically alters the firmware's running CCode (Firmware changed CCode to CN).
+To stop the driver from ever sending "CN" to the firmware:
+• If using bcmdhd (wl_cfg80211.c / dhd_common.c):
+Find the function wl_cfg80211_set_country_code or dhd_customer_oob_irq_map / translate_custom_table where "country" IOVAR is constructed. Force the ccode string sent to the dongle to always be "US":c
+memcpy(cspec.country_abbrev, "US", 2);
+memcpy(cspec.ccode, "US", 2);
+cspec.rev = 0;
+Use code with caution.
+• If using brcmfmac (cfg80211.c):
+In brcmf_cfg80211_reg_notifier, the driver calls brcmf_fil_iovar_data_set(ifp, "country", &ccreq, sizeof(ccreq)). That exact line is what changes the firmware's internal state. Either return; at the very top of brcmf_cfg80211_reg_notifier (after initial boot) or hardcode ccreq.country_abbrev and ccreq.ccode to "US" right before brcmf_fil_iovar_data_set.
+
+3. Binary-Patch "CN" to "US" Inside the .clm_blob or .bin Firmware
+
+If the firmware's internal 802.11d state machine is changing the country code autonomously without going through the host driver's "country" IOVAR, the channel rules live inside /lib/firmware/brcm/brcmfmac43456-sdio.clm_blob (or embedded inside brcmfmac43456-sdio.bin if no separate .clm_blob exists).
+By swapping the ASCII string "CN" with "ZZ" (or duplicating the "US" record over "CN") in the CLM data structure:
+1. When the firmware hears a CN 802.11d beacon, its lookup for "CN" in its internal CLM table fails (so it stays on "US"), or
+2. You update brcmfmac43456-sdio.clm_blob using the Raspberry Pi 400 / Synaptics updated CLM blob from the Raspberry Pi Firmware GitHub Repository (firmware-nonfree/debian/config/brcm80211/cypress/cyfmac43456-sdio.clm_blob), which properly unlocks all 5GHz channels (36–64 and 149–165) under the CN profile so the switch to CN no longer disables 5GHz.
+Which exact driver module is running on your Orange Pi 5 Pro (bcmdhd / brcmfmac), and can you share the C function where you placed that debug hook? I can give you the exact IOVAR override for that function.
+--
+U:mod probe hack does not work too.
+brcmfmac
+more txt entry does not work also
+A:To stop brcmfmac from overriding your country code to CN upon receiving 802.11d beacons, you must either patch the brcmfmac kernel module (in cfg80211.c), binary-patch the CN string out of your firmware binary, or add a country_codes translation table via Device Tree.
+
+Why modprobe and .txt Edits Failed
+
+1. cfg80211 ignores ieee80211_regdom=US once connected: When brcmfmac registers with the Linux kernel (wiphy), it does not set the REGULATORY_COUNTRY_IE_IGNORE flag. As soon as wpa_supplicant associates with your AP, the kernel's cfg80211 parses the AP's 802.11d beacon (mode = CountryIE) and calls brcmf_cfg80211_reg_notifier().
+2. brcmf_cfg80211_reg_notifier() pushes CN into the firmware: Inside drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c, the driver takes req->alpha2 ("CN") and sends brcmf_fil_iovar_data_set(ifp, "country", &ccreq, sizeof(ccreq)) straight over the SDIO bus into the chip.
+3. NVRAM .txt only sets initial state: The .txt file only initializes NVRAM variables in RAM at power-up; it cannot block runtime IOVAR commands from the host driver.
+
+Fix 1: Binary-Patch "CN" in the Firmware / CLM Blob (Zero Recompile)
+
+When brcmfmac sends the "country" IOVAR with "CN" to the chip, the firmware looks up "CN" inside its internal Country Locale Matrix (either in brcmfmac43456-sdio.clm_blob or embedded inside brcmfmac43456-sdio.bin). If the firmware cannot find "CN" in its table, it rejects the country change (Firmware rejected country setting) and stays on US!
+Alternatively, you can replace the broken CN channel list by installing the updated Synaptics/Raspberry Pi 400 clm_blob and .bin files:
+
+Option A: Hex-edit the firmware so it rejects "CN"
+
+1. Check if your firmware uses an external .clm_blob or embeds it in .bin:bash
+ls -la /lib/firmware/brcm/*43456*
+Use code with caution.
+2. Back up your firmware files:bash
+cp /lib/firmware/brcm/brcmfmac43456-sdio.bin /root/brcmfmac43456-sdio.bin.bak
+cp /lib/firmware/brcm/brcmfmac43456-sdio.clm_blob /root/brcmfmac43456-sdio.clm_blob.bak 2>/dev/null
+Use code with caution.
+3. Run this Python one-liner to replace the "CN\x00" country table entries in the binary/blob with "C9\x00" (a dummy code that never matches "CN"):bash
+python3 -c '
+import glob
+for path in glob.glob("/lib/firmware/brcm/*43456*.bin") + glob.glob("/lib/firmware/brcm/*43456*.clm_blob"):
+    with open(path, "rb") as f:
+        data = f.read()
+    # Replace null-terminated "CN\x00\x00" country struct entries with "C9\x00\x00"
+    patched = data.replace(b"CN\x00\x00", b"C9\x00\x00")
+    if data != patched:
+        with open(path, "wb") as f:
+            f.write(patched)
+        print(f"Patched CN -> C9 in {path}")
+'
+Use code with caution.
+4. Reload the module (or update initramfs and reboot):bash
+modprobe -r brcmfmac_wcc brcmfmac && modprobe brcmfmac
+Use code with caution.
+When the AP sends the CountryIE for CN, dmesg will now print brcmf_cfg80211_reg_notifier: Firmware rejected country setting and keep your chip locked to US.
+
+Option B: Install the Updated Synaptics brcmfmac43456-sdio.clm_blob
+
+Upstream linux-firmware often lacks brcmfmac43456-sdio.clm_blob, leaving the chip with restricted embedded CN tables. Grabbing the updated brcmfmac43456-sdio.bin and brcmfmac43456-sdio.clm_blob from the pyavitz Firmware GitHub Repository or RPi-Distro firmware-nonfree GitHub Repository adds full 5GHz support (channels 36–64 and 149–165) directly to the CN profile.
+
+Fix 2: Patch brcmfmac in C (Since You Already Have a Driver Hook)
+
+In drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c, brcmf_cfg80211_reg_notifier() handles the regulatory request. You can stop CountryIE changes in two places:
+1. In brcmf_cfg80211_attach() (cfg80211.c):
+Add the REGULATORY_COUNTRY_IE_IGNORE flag to wiphy->regulatory_flags so the Linux kernel never processes 802.11d frames from the router:c
+wiphy->regulatory_flags |= REGULATORY_COUNTRY_IE_IGNORE;
+Use code with caution.
+2. Or inside brcmf_cfg80211_reg_notifier() (cfg80211.c):
+Block non-user initiators or force "US" right before brcmf_fil_iovar_data_set(ifp, "country", &ccreq, sizeof(ccreq)):c
+/* Ignore 802.11d AP beacon country changes */
+if (req->initiator == NL80211_REGDOM_SET_BY_COUNTRY_IE)
+    return;
+Use code with caution.
+(Or overwrite memcpy(ccreq.ccode, "US", 2); memcpy(ccreq.country_abbrev, "US", 2); inside brcmf_translate_country_code()).
+
+Fix 3: Live Binary Patch of brcmfmac.ko (If You Don't Want to Recompile)
+
+If you are using a stock Armbian kernel and used a dynamic probe (kprobe/ftrace) for that debug output, brcmfmac.ko sends the "country" IOVAR by looking up the literal string "country" inside the .ko binary.
+• If your NVRAM .txt file already boots the chip into US (Firmware current CCode is US), you can neuter all post-boot country changes from brcmfmac.ko by replacing the string "country\x00" with "countrx\x00" inside /lib/modules/$(uname -r)/kernel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko (decompressing .ko.xz or .ko.zst first if compressed):bash
+# Find the module path
+MODPATH=$(modinfo -n brcmfmac)
+echo "Module is at: $MODPATH"
+Use code with caution.
+When brcmf_cfg80211_reg_notifier tries to call brcmf_fil_iovar_data_set(ifp, "countrx", ...), the firmware returns BCME_UNSUPPORTED and stays on the ccode=US loaded from brcmfmac43456-sdio.txt at boot!
+Would you prefer to binary-patch brcmfmac.ko / brcmfmac43456-sdio.bin right on the system, or are you compiling the kernel module from source? If you run ls -la /lib/firmware/brcm/*43456* and modinfo -n brcmfmac, I can give you the exact command for your layout.
+--
+U:the blob is already updated by userpatch overlay
+A:Since you are building your own image with an Armbian userpatches overlay, the cleanest, permanent fix is to add a small kernel patch to userpatches/kernel/<your-kernel-family>/ that blocks brcmfmac from ever passing "CN" or CountryIE requests down to the firmware.
+Here are the two exact ways to solve this—either cleanly in your Armbian build patch, or immediately on your live board without rebuilding.
+
+Method 1: Add a Kernel Patch to Your Armbian userpatches (Permanent Build Fix)
+
+In drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c, you can both tell the Linux kernel's wiphy layer to ignore 802.11d beacons (REGULATORY_COUNTRY_IE_IGNORE) and intercept any "CN" request inside brcmf_cfg80211_reg_notifier() so it translates "CN" into "US" before calling the firmware's "country" IOVAR.
+Drop this patch into your Armbian userpatches/kernel/<family>-<branch>/ folder (e.g., zzz-brcmfmac-ignore-country-ie.patch):
+diff
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
+@@ -7800,6 +7800,14 @@ static void brcmf_cfg80211_reg_notifier(struct wiphy *wiphy,
+ 	struct brcmf_if *ifp = brcmf_get_ifp(cfg->pub, 0);
+ 	struct brcmf_fil_country_le ccreq;
+ 	s32 err;
++
++	/* Ignore 802.11d AP Country IE updates completely */
++	if (req->initiator == NL80211_REGDOM_SET_BY_COUNTRY_IE)
++		return;
++
++	/* Force CN requests to US */
++	if (req->alpha2[0] == 'C' && req->alpha2[1] == 'N') {
++		req->alpha2[0] = 'U';
++		req->alpha2[1] = 'S';
++	}
+ 
+ 	/* ignore non-ISO3166 country codes */
+ 	for (i = 0; i < 2; i++)
+@@ -8020,6 +8028,7 @@ struct brcmf_cfg80211_info *brcmf_cfg80211_attach(struct brcmf_pub *drvr,
+ 	wiphy->regulatory_flags |= REGULATORY_CUSTOM_REG;
++	wiphy->regulatory_flags |= REGULATORY_COUNTRY_IE_IGNORE;
+Use code with caution.
+(Note: Since you already added the [T89] Request regdom change debug print inside your kernel tree, you can place those two if blocks right at the top of the exact function where you put your printk/pr_info!)
+
+Method 2: Why the Updated clm_blob Didn't Fix 5GHz (And How to Fix It Live)
+
+There is a critical quirk with the AP6256 (BCM43456) firmware (brcmfmac43456-sdio.bin):
+1. BCM43456 firmware Often Ignores External .clm_blob Files: Unlike the BCM43455 (which requires an external .clm_blob), most AP6256 / BCM43456 .bin firmware builds have their CLM table statically compiled inside brcmfmac43456-sdio.bin and don't even request brcmfmac43456-sdio.clm_blob from the kernel (you can verify this by checking dmesg | grep -i clm).
+2. Even if loaded, CN in the CLM table defaults to regrev=0 or DFS-FCC with NO-IR: When brcmfmac switches to CN (ccode=CN, regrev=0 or -1), the internal table inside brcmfmac43456-sdio.bin disables channels 36–144 unless a specific high regrev (like CN/38) is requested.
+
+Instant Live Fix on the Board (No Recompile Needed)
+
+Since your NVRAM .txt already boots the firmware into US ([ 18.290924] Firmware current CCode is US), you can stop brcmfmac.ko from ever changing the firmware's country code after boot by patching the "country" IOVAR string inside brcmfmac.ko on your live system:
+bash
+# 1. Locate the brcmfmac kernel module
+MOD=$(modinfo -n brcmfmac)
+cp "$MOD" /root/brcmfmac.ko.bak
+
+# 2. Replace the "country\0" IOVAR string with "countrx\0" so post-boot CCode changes fail harmlessly
+python3 -c "
+p = '$MOD'
+with open(p, 'rb') as f: d = f.read()
+assert b'country\x00' in d, 'String not found (module may be compressed)'
+with open(p, 'wb') as f: f.write(d.replace(b'country\x00', b'countrx\x00'))
+print('Successfully locked brcmfmac to boot NVRAM ccode!')
+"
+
+# 3. Reload the module
+modprobe -r brcmfmac_wcc brcmfmac 2>/dev/null; modprobe brcmfmac
+Use code with caution.
+With "country\x00" changed to "countrx\x00", the chip boots up with ccode=US from your brcmfmac43456-sdio.txt, and when the router's CountryIE triggers at 18 seconds, the countrx IOVAR returns -23 (BCME_UNSUPPORTED) and leaves the firmware permanently on US.
+Can you paste the patch file from your userpatches directory that adds those [T89] Request regdom change debug messages? Seeing the exact lines from your tree will let me give you a drop-in .patch file that matches your kernel line-for-line.
