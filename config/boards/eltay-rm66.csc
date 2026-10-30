@@ -1,10 +1,10 @@
+# Rockchip RK3566 quad core CM4 module 4/8GB RAM 32/64GB eMMC WiFi5/BT5 GbE HDMI PCIe USB3
 BOARD_NAME="ELTAY RM66"
 BOARD_VENDOR="elron"
 BOARDFAMILY="rk35xx"
 BOARD_MAINTAINER="RiPetitor"
 INTRODUCED="2026"
 BOOTCONFIG="eltay-rm66-rk3566_defconfig"
-BOOT_SOC="rk3566"
 KERNEL_TARGET="current,vendor,edge"
 KERNEL_TEST_TARGET="current"
 BOOT_FDT_FILE="rockchip/rk3566-eltay-rm66-bb-cm4.dtb"
@@ -25,6 +25,7 @@ function post_family_config__eltay_rm66_uboot() {
 }
 
 function post_family_config__eltay_rm66_kernel() {
+	[[ "${BRANCH}" != vendor* ]] && declare -g OVERLAY_PREFIX="rockchip"
 	[[ "${BRANCH}" == vendor* ]] || return 0
 	display_alert "$BOARD" "Vendor BSP ${KERNEL_MAJOR_MINOR} (family branch): NPU, Media and CAM1 enabled" "info"
 }

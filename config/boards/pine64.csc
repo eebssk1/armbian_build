@@ -1,8 +1,8 @@
 # Allwinner A64 quad core 512MB-2GB RAM SoC GBE
-BOARD_NAME="Pine64"
+BOARD_NAME="Pine A64 / A64+"
 BOARD_VENDOR="pine64"
 BOARDFAMILY="sun50iw1"
-BOARD_MAINTAINER=""
+BOARD_MAINTAINER="janprunk"
 INTRODUCED="2016"
 BOOTCONFIG="pine64_plus_defconfig"
 KERNEL_TARGET="current,edge,legacy"
