@@ -57,7 +57,7 @@ jobs:
           export CCACHE_COMPRESSLEVEL=2
           hash -r
           export KERNEL_EXTRA_CFLAGS='-fipa-pta -D__1ENABLE_AGGRESSIVE_GRAPHITE9__ -march=armv8.2-a+dotprod+crypto+rcpc -mtune=cortex-a76.cortex-a55'
-          ./compile.sh mybuild PREFER_DOCKER=no USE_CCACHE=yes BOARD=orangepi5pro BRANCH=edge BUILD_DESKTOP=no BUILD_MINIMAL=yes EXPERT=yes RELEASE=trixie NETWORKING_STACK=network-manager COMPRESS_OUTPUTIMAGE=sha,img ATF_COMPILE=yes ARTIFACT_IGNORE_CACHE="yes" DOWNLOAD_MIRROR="china" NAMESERVER="223.5.5.5" KERNEL_KEEP_CONFIG=yes CLEAN_LEVEL="make,images,alldebs,oldcache" ROOTFS_TYPE=xfs BOOTFS_TYPE=ext4 KERNEL_CONFIGURE=no
+          ./compile.sh mybuild PREFER_DOCKER=no USE_CCACHE=yes BOARD=orangepi5pro BRANCH=edge BUILD_DESKTOP=no BUILD_MINIMAL=yes EXPERT=yes RELEASE=trixie NETWORKING_STACK=network-manager COMPRESS_OUTPUTIMAGE=sha,img ATF_COMPILE=yes ARTIFACT_IGNORE_CACHE="yes" DOWNLOAD_MIRROR="china" NAMESERVER="223.5.5.5" CLEAN_LEVEL="make,images,alldebs,oldcache" ROOTFS_TYPE=xfs BOOTFS_TYPE=ext4 KERNEL_CONFIGURE=no
       - name: Encrypt images
         if: steps.first_boot.outputs.image_format == '7z'
         env:
