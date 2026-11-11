@@ -1,0 +1,32 @@
+#!/bin/sh
+set -e
+
+PREREQ=""
+prereqs()
+{
+    echo "$PREREQ"
+}
+
+case "${1:-}" in
+    prereqs)
+        prereqs
+        exit 0
+        ;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+if [ ! -e /boot/need_pci_rescan ]; then
+    exit 0
+fi
+
+mkdir -p "${DESTDIR}/boot"
+cp -p /boot/need_pci_rescan "${DESTDIR}/boot/need_pci_rescan"
+
+if [ ! -x "${DESTDIR}/bin/sleep" ] &&
+   [ ! -x "${DESTDIR}/usr/bin/sleep" ] &&
+   [ ! -x "${DESTDIR}/usr/lib/klibc/bin/sleep" ]; then
+    copy_exec /bin/sleep /bin/sleep
+fi
+
+exit 0

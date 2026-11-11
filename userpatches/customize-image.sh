@@ -34,6 +34,7 @@ Main() {
 	echo "tls" >> /etc/modules
 	echo "nf_conntrack" >> /etc/modules
 	echo "br_netfilter" >> /etc/modules
+	echo "ramoops" >> /etc/modules
 	if [ ! -e /etc/sysctl.d/99-sysctl.conf ]; then
 		touch /etc/sysctl.d/99-sysctl.conf
 	fi

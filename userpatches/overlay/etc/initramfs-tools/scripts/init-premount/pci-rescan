@@ -13,6 +13,10 @@ esac
 
 . /scripts/functions || true
 
+if [ ! -e /boot/need_pci_rescan ]; then
+exit 0
+fi
+
 sleep 1
 log_begin_msg "Rescanning PCIe bus ..."
 echo 1 > /sys/bus/pci/rescan

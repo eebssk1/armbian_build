@@ -13,16 +13,18 @@ exit 0
 ;;
 esac
 
+#useless
 #iwconfig $DEVICE_IP_IFACE txpower 27dbm
 iwconfig $DEVICE_IP_IFACE retry short 9
 iwconfig $DEVICE_IP_IFACE retry long 8
-iwconfig $DEVICE_IP_IFACE rts 900
+iwconfig $DEVICE_IP_IFACE rts 960
+#malfunction
 #iwconfig $DEVICE_IP_IFACE frag 1280
 iwconfig $DEVICE_IP_IFACE commit
 ip link set dev $DEVICE_IP_IFACE mode default
 ip link set dev $DEVICE_IP_IFACE qlen 3200
+#not really benefical
 #tc qdisc replace dev $DEVICE_IP_IFACE root fq_pie noecn
-
-tc qdisc replace dev $DEVICE_IP_IFACE root handle 1: sfq
+tc qdisc replace dev $DEVICE_IP_IFACE root handle 1: sfq headdrop
 
 exit 0

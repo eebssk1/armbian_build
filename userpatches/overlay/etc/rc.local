@@ -1,0 +1,179 @@
+#!/bin/sh
+#
+# rc.local
+
+echo teo > /sys/devices/system/cpu/cpuidle/current_governor
+
+echo 800 > /sys/kernel/mm/lru_gen/min_ttl_ms
+
+for a in /sys/block/nvme*/queue; do
+    if [ -d "$a" ]; then
+        echo kyber > "$a/scheduler"
+        echo 1 > "$a/rq_affinity"
+        echo 296 > "$a/read_ahead_kb"
+        echo 5490000 > "$a/iosched/read_lat_nsec"
+        echo 13300000 > "$a/iosched/write_lat_nsec"
+        echo 0 > "$a/nomerges"
+        echo 0 > "$a/add_random"
+        echo 3448 > "$a/wbt_lat_usec"
+    fi
+done
+
+for a in /sys/block/mmcblk*/queue; do
+    if [ -d "$a" ]; then
+        echo mq-deadline > "$a/scheduler" 2>/dev/null || echo deadline > "$a/scheduler" 2>/dev/null
+        echo 1 > "$a/rq_affinity"
+        echo 325 > "$a/read_ahead_kb"
+        if [ -d "$a/iosched" ]; then
+            echo 336 > "$a/iosched/read_expire"
+            echo 600 > "$a/iosched/write_expire"
+            echo 16 > "$a/iosched/async_depth"
+            echo 10 > "$a/iosched/fifo_batch"
+            echo 2 > "$a/iosched/writes_starved"
+            echo 1 > "$a/iosched/front_merges"
+        fi
+        echo 0 > "$a/nomerges"
+        echo 0 > "$a/add_random"
+        echo 3472 > "$a/wbt_lat_usec"
+    fi
+done
+
+for a in /sys/block/sd*/queue; do
+    if [ -d "$a" ] && [ "$(cat "$a/rotational" 2>/dev/null)" = "0" ]; then
+        echo mq-deadline > "$a/scheduler" 2>/dev/null || echo deadline > "$a/scheduler" 2>/dev/null
+        echo 1 > "$a/rq_affinity"
+        echo 274 > "$a/read_ahead_kb"
+        if [ -d "$a/iosched" ]; then
+            echo 280 > "$a/iosched/read_expire"
+            echo 1320 > "$a/iosched/write_expire"
+            echo 16 > "$a/iosched/async_depth"
+            echo 8 > "$a/iosched/fifo_batch"
+            echo 2 > "$a/iosched/writes_starved"
+            echo 1 > "$a/iosched/front_merges"
+        fi
+        echo 0 > "$a/nomerges"
+        echo 0 > "$a/add_random"
+        [ -e "$a/wbt_lat_usec" ] && echo 2150 > "$a/wbt_lat_usec"
+    fi
+done
+
+echo "defer+madvise" > /sys/kernel/mm/transparent_hugepage/defrag
+
+# Zero memory waste during khugepaged collapse (no zero-padding empty PTEs)
+echo 0 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none
+echo 64 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_shared
+echo 16 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap
+
+# Disable non-alternating mTHP sizes (especially 2048kB) so they don't hijack VMAs
+for a in 16 128 512 2048; do
+    if [ -d "/sys/kernel/mm/transparent_hugepage/hugepages-${a}kB" ]; then
+        echo never > "/sys/kernel/mm/transparent_hugepage/hugepages-${a}kB/enabled"
+        echo never > "/sys/kernel/mm/transparent_hugepage/hugepages-${a}kB/shmem_enabled"
+    fi
+done
+
+# Inherit kernel's default 'always' on your 32, 64, 256, 1024kB tiers
+# Use 'within_size' for shmem so small tmpfs files don't allocate a 1024kB folio
+for a in 32 64 256 1024; do
+    echo inherit > "/sys/kernel/mm/transparent_hugepage/hugepages-${a}kB/enabled"
+    echo inherit > "/sys/kernel/mm/transparent_hugepage/hugepages-${a}kB/shmem_enabled"
+done
+
+# Lower khugepaged shared-page threshold so it doesn't break KSM merges
+echo 16 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_shared
+
+# Low-bloat KSM tuning for RK3588S
+if [ -d /sys/kernel/mm/ksm ]; then
+    echo 1 > /sys/kernel/mm/ksm/use_zero_pages
+    echo 4 > /sys/kernel/mm/ksm/max_page_sharing
+    echo 3500 > /sys/kernel/mm/ksm/stable_node_chains_prune_millisecs
+    echo 3200 > /sys/kernel/mm/ksm/sleep_millisecs
+    echo 32 > /sys/kernel/mm/ksm/pages_to_scan
+    echo 1 > /sys/kernel/mm/ksm/advisor_max_cpu
+    echo 16 > /sys/kernel/mm/ksm/advisor_min_pages_to_scan
+    echo 512 > /sys/kernel/mm/ksm/advisor_max_pages_to_scan
+    echo 1800 > /sys/kernel/mm/ksm/advisor_target_scan_time
+    echo "scan-time" > /sys/kernel/mm/ksm/advisor_mode
+    echo 1 > /sys/kernel/mm/ksm/run
+fi
+
+for p in /sys/devices/system/cpu/cpufreq/policy*; do
+    echo schedutil > "$p/scaling_governor"
+done
+
+schedutil_applied=0
+if [ -e /sys/devices/system/cpu/cpufreq/schedutil/rate_limit_us ]; then
+    if echo 1000 > /sys/devices/system/cpu/cpufreq/schedutil/rate_limit_us; then
+        schedutil_applied=1
+    else
+        echo "Warning: cannot write global schedutil rate_limit_us" >&2
+    fi
+else
+    if [ -e /sys/devices/system/cpu/cpufreq/policy0/schedutil/rate_limit_us ]; then
+        if echo 1000 > /sys/devices/system/cpu/cpufreq/policy0/schedutil/rate_limit_us; then
+            schedutil_applied=1
+        else
+            echo "Warning: cannot write policy0 schedutil rate_limit_us" >&2
+        fi
+    fi
+    for p in /sys/devices/system/cpu/cpufreq/policy4 /sys/devices/system/cpu/cpufreq/policy6; do
+        if [ -e "$p/schedutil/rate_limit_us" ]; then
+            if echo 4000 > "$p/schedutil/rate_limit_us"; then
+                schedutil_applied=1
+            else
+                echo "Warning: cannot write $p/schedutil/rate_limit_us" >&2
+            fi
+        fi
+    done
+fi
+if [ "$schedutil_applied" -eq 0 ]; then
+    echo "Warning: no schedutil rate_limit_us setting applied" >&2
+fi
+
+
+if [ -d /sys/kernel/debug/sched ]; then
+    echo 1 > /sys/kernel/debug/sched/tunable_scaling
+    echo 15 > /sys/kernel/debug/sched/nr_migrate
+    echo 1800000 > /sys/kernel/debug/sched/migration_cost_ns
+#    echo 3000000 > /sys/kernel/debug/sched/base_slice_ns
+fi
+
+for a in 0 1 2 3; do
+    if [ -d "/sys/kernel/debug/sched/domains/cpu$a" ]; then
+        echo 8 > "/sys/kernel/debug/sched/domains/cpu$a/domain0/busy_factor"
+        echo 2 > "/sys/kernel/debug/sched/domains/cpu$a/domain0/min_interval"
+        echo 8 > "/sys/kernel/debug/sched/domains/cpu$a/domain0/max_interval"
+
+        echo 32 > "/sys/kernel/debug/sched/domains/cpu$a/domain1/busy_factor"
+        echo 12 > "/sys/kernel/debug/sched/domains/cpu$a/domain1/min_interval"
+        echo 48 > "/sys/kernel/debug/sched/domains/cpu$a/domain1/max_interval"
+    fi
+done
+
+for a in 4 5 6 7; do
+    if [ -d "/sys/kernel/debug/sched/domains/cpu$a" ]; then
+        echo 16 > "/sys/kernel/debug/sched/domains/cpu$a/domain0/busy_factor"
+        echo 4 > "/sys/kernel/debug/sched/domains/cpu$a/domain0/min_interval"
+        echo 16 > "/sys/kernel/debug/sched/domains/cpu$a/domain0/max_interval"
+
+        echo 16 > "/sys/kernel/debug/sched/domains/cpu$a/domain1/busy_factor"
+        echo 6 > "/sys/kernel/debug/sched/domains/cpu$a/domain1/min_interval"
+        echo 24 > "/sys/kernel/debug/sched/domains/cpu$a/domain1/max_interval"
+    fi
+done
+
+for a in 0 1 2 3; do
+    echo 280 > "/sys/devices/system/cpu/cpu$a/power/pm_qos_resume_latency_us"
+done
+for a in 4 5 6 7; do
+    echo 570 > "/sys/devices/system/cpu/cpu$a/power/pm_qos_resume_latency_us"
+done
+
+[ -e /proc/sys/kernel/sched_util_clamp_min_rt_default ] && echo 128 > /proc/sys/kernel/sched_util_clamp_min_rt_default
+
+for a in /sys/class/scsi_host/host*/link_power_management_policy
+do
+echo med_power_with_dipm > $a
+done
+
+exit 0
