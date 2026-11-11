@@ -83,7 +83,8 @@ function prepare_partitions() {
 	mkfs[xfs]=xfs
 	# mkfs[nfs] is empty
 
-	mountopts[ext4]=',commit=45,errors=remount-ro,max_batch_time=19200,min_batch_time=480' # EXT4 default: 5 (https://www.man7.org/linux/man-pages/man5/ext4.5.html)
+	# Preserve local defaults; TUNING_PROFILE may replace commit= on first boot.
+	mountopts[ext4]=',commit=45,errors=remount-ro,max_batch_time=19200,min_batch_time=480'
 	# mountopts[ext2] is empty
 	# mountopts[fat] is empty
 	# mountopts[f2fs] is empty
@@ -356,6 +357,8 @@ function prepare_partitions() {
 				echo "UMASK=0077" > "${SDCARD}/etc/initramfs-tools/conf.d/key-umask.conf"
 				echo "" >> "${SDCARD}/etc/cryptsetup-initramfs/conf-hook"
 				echo "KEYFILE_PATTERN=${luks_key_file}" >> "${SDCARD}/etc/cryptsetup-initramfs/conf-hook"
+				# All copies of the image share this key. The user makes new keys
+				# with armbian-config (armbian-luks-rekey). It is not automatic.
 			fi
 			# map the LUKS container partition via its UUID to be the 'cryptroot' device
 			physical_root_part_uuid="$(blkid -s UUID -o value "$physical_rootdevice")"
@@ -532,7 +535,18 @@ function prepare_partitions() {
 
 	# complement extlinux config if it exists; remove armbianEnv in this case.
 	if [[ -f "${SDCARD}/boot/extlinux/extlinux.conf" ]]; then
-		echo "  append root=$rootfs $SRC_CMDLINE $MAIN_CMDLINE" >> "${SDCARD}/boot/extlinux/extlinux.conf"
+		local extlinux_cmdline="${MAIN_CMDLINE}"
+		# no splash without Plymouth (minimal images, no video output)
+		if [[ "${PLYMOUTH}" != "yes" ]]; then
+			local -a cmdline_words kept_words=()
+			local word
+			read -r -a cmdline_words <<< "${MAIN_CMDLINE}"
+			for word in "${cmdline_words[@]}"; do
+				[[ "${word}" == "splash" || "${word}" == plymouth.* ]] || kept_words+=("${word}")
+			done
+			extlinux_cmdline="${kept_words[*]}"
+		fi
+		echo "  append root=$rootfs $SRC_CMDLINE $extlinux_cmdline" >> "${SDCARD}/boot/extlinux/extlinux.conf"
 		display_alert "extlinux.conf exists" "removing armbianEnv.txt" "info"
 		[[ -f "${SDCARD}/boot/armbianEnv.txt" ]] && run_host_command_logged rm -v "${SDCARD}/boot/armbianEnv.txt"
 	fi
