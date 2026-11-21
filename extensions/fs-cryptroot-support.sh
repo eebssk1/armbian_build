@@ -32,16 +32,25 @@ function extension_prepare_config__prepare_cryptroot() {
 function prepare_root_device__250_encrypt_root_device() {
 	# We encrypt the rootdevice (currently a loop device) and return the new mapped rootdevice
 	check_loop_device "$rootdevice"
-	display_alert "Extension: ${EXTENSION}: Encrypting root partition with LUKS..." "cryptsetup luksFormat $CRYPTROOT_PARAMETERS $rootdevice" ""
+	# A family can set a default cipher, for example Adiantum for CPUs without AES
+	# instructions. A --cipher in CRYPTROOT_PARAMETERS comes later and wins.
+	declare -a cryptroot_cipher_args=()
+	[[ -n "${CRYPTROOT_CIPHER}" ]] && cryptroot_cipher_args+=(--cipher "${CRYPTROOT_CIPHER}")
+	[[ -n "${CRYPTROOT_KEY_SIZE}" ]] && cryptroot_cipher_args+=(--key-size "${CRYPTROOT_KEY_SIZE}")
+	display_alert "Extension: ${EXTENSION}: Encrypting root partition with LUKS..." "cryptsetup luksFormat ${cryptroot_cipher_args[*]} $CRYPTROOT_PARAMETERS $rootdevice" ""
 	if [[ $CRYPTROOT_AUTOUNLOCK == "yes" ]]; then
 		display_alert "Extension: ${EXTENSION}: configuring LUKS autounlock" ""
 		declare -g cryptroot_autounlock_key_file=$(mktemp)
 		openssl rand -base64 32 > "$cryptroot_autounlock_key_file"
-		cryptsetup luksFormat $CRYPTROOT_PARAMETERS "$rootdevice" "$cryptroot_autounlock_key_file"
+		# The key file is random: a slow key derivation adds no strength. luksFormat
+		# times the derivation on the build host, so a slow board would spend seconds
+		# unlocking at every boot. Use the PBKDF2 minimum.
+		cryptsetup luksFormat "${cryptroot_cipher_args[@]}" $CRYPTROOT_PARAMETERS --pbkdf pbkdf2 --pbkdf-force-iterations 1000 \
+			"$rootdevice" "$cryptroot_autounlock_key_file"
 		cryptroot_open_mapper
 	else # CRYPTROOT_PASSPHRASE case
 		display_alert "Extension: ${EXTENSION}: configuring LUKS password" ""
-		echo -n "$CRYPTROOT_PASSPHRASE" | cryptsetup luksFormat $CRYPTROOT_PARAMETERS "$rootdevice" -
+		echo -n "$CRYPTROOT_PASSPHRASE" | cryptsetup luksFormat "${cryptroot_cipher_args[@]}" $CRYPTROOT_PARAMETERS "$rootdevice" -
 		cryptroot_open_mapper
 	fi
 	add_cleanup_handler cleanup_cryptroot
@@ -86,9 +95,18 @@ function cryptroot_open_mapper() {
 		sleep 15
 		waited+=15
 	done
-	# Keep the open count above 0, also between mkfs and mount. The kernel drops the hold when the build ends.
-	exec {cryptroot_hold_fd}< "/dev/mapper/$CRYPTROOT_MAPPER" ||
-		display_alert "Cannot hold mapping open" "a waiting build can remove it after 2 minutes idle" "wrn"
+	# Keep the open count above 0, also between mkfs and mount. A helper process holds the mapping:
+	# a fd in this shell leaks into each child process, and the close at cleanup then fails.
+	# The helper exits when the build ends, also when the build is killed.
+	(
+		declare fd
+		for fd in /proc/self/fd/*; do # Inherited fds such as the log pipe: the log must not wait for the helper.
+			fd="${fd##*/}"
+			((fd > 2)) && exec {fd}>&-
+		done
+		exec tail --pid=$$ -f /dev/null < "/dev/mapper/$CRYPTROOT_MAPPER" > /dev/null 2>&1
+	) &
+	cryptroot_hold_pid=$!
 }
 
 function pre_install_kernel_debs__adjust_dropbear_configuration() {
@@ -131,6 +149,17 @@ function pre_install_kernel_debs__adjust_dropbear_configuration() {
 	fi
 }
 
+# The cryptsetup-initramfs hook adds the "adiantum" module, but not the XChaCha12
+# module: the kernel loads it on request. List both; the alias fits every kernel.
+function pre_update_initramfs__cryptroot_adiantum_modules() {
+	[[ "${CRYPTROOT_CIPHER} ${CRYPTROOT_PARAMETERS}" == *adiantum* ]] || return 0
+	local mod modules="${MOUNT}/etc/initramfs-tools/modules"
+	for mod in adiantum xchacha12; do
+		grep -qx "$mod" "$modules" 2> /dev/null || echo "$mod" >> "$modules"
+	done
+	display_alert "Extension: ${EXTENSION}: Adiantum modules for the initramfs" "adiantum xchacha12" "info"
+}
+
 function post_umount_final_image__export_private_key() {
 	if [[ $CRYPTROOT_SSH_UNLOCK == yes && -f "${DROPBEAR_DIR}"/id_ecdsa ]]; then
 		CRYPTROOT_SSH_UNLOCK_KEY_PATH="${DESTIMG}/${version}.key"
@@ -146,7 +175,24 @@ function post_umount_final_image__750_cryptroot_cleanup() {
 }
 
 function cleanup_cryptroot() {
-	[[ -n $cryptroot_hold_fd ]] && exec {cryptroot_hold_fd}<&- && unset cryptroot_hold_fd
-	cryptsetup luksClose "${CRYPTROOT_MAPPER}" 2>&1
-	display_alert "Cryptroot closed ${CRYPTROOT_MAPPER}" "${EXTENSION}" "info"
+	if [[ -n $cryptroot_hold_pid ]]; then
+		kill "$cryptroot_hold_pid" 2> /dev/null || true
+		wait "$cryptroot_hold_pid" 2> /dev/null || true
+		unset cryptroot_hold_pid
+	fi
+	if cryptsetup close "${CRYPTROOT_MAPPER}" 2>&1; then
+		display_alert "Cryptroot closed ${CRYPTROOT_MAPPER}" "${EXTENSION}" "info"
+		return 0
+	fi
+	# The kernel removes the mapping when the last holder exits.
+	declare dm_node holders="" fd pid
+	dm_node="$(readlink -f "/dev/mapper/${CRYPTROOT_MAPPER}")"
+	for fd in /proc/[0-9]*/fd/*; do
+		[[ "$(readlink "$fd" 2> /dev/null)" == "$dm_node" ]] || continue
+		pid="${fd#/proc/}" && pid="${pid%%/*}"
+		holders+="${pid}:$(cat "/proc/${pid}/comm" 2> /dev/null) "
+	done
+	display_alert "Cryptroot busy, trying deferred close of ${CRYPTROOT_MAPPER}" "holders: ${holders:-unknown}" "wrn"
+	cryptsetup close --deferred "${CRYPTROOT_MAPPER}" 2>&1 || return $?
+	display_alert "Cryptroot deferred removal scheduled" "${CRYPTROOT_MAPPER}" "info"
 }
