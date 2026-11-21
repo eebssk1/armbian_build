@@ -138,9 +138,9 @@ activate_ramlog_partition() {
 	fi
 
 	if dpkg --compare-versions "$MKFS_VERSION" gt "2.40.1"; then
-		mkfs.ext4 -O ^has_journal -G 16 -E packed_meta_blocks=1 -L log2ram /dev/${log_device}
+		mkfs.ext4 -O ^has_journal,sparse_super2 -G 8 -E packed_meta_blocks=1 -m 0 -L log2ram /dev/${log_device}
 	else
-		mkfs.ext4 -O ^has_journal -G 16 -E packed_meta_blocks=1 -s 1024 -L log2ram /dev/${log_device}
+		mkfs.ext4 -O ^has_journal,sparse_super2 -G 8 -E packed_meta_blocks=1 -s 1024 -m 0 -L log2ram /dev/${log_device}
 	fi
 
 	algo=$(sed 's/.*\[\([^]]*\)\].*/\1/g' </sys/block/${log_device}/comp_algorithm)
@@ -162,9 +162,9 @@ activate_compressed_tmp() {
 	fi
 	[[ -z ${TMP_SIZE} ]] && echo -n $(( memory_total / 2 )) > /sys/block/${tmp_device}/disksize || echo -n ${TMP_SIZE} > /sys/block/${tmp_device}/disksize
 	if dpkg --compare-versions "$MKFS_VERSION" gt "2.40.1"; then
-		mkfs.ext4 -O ^has_journal -G 16 -E packed_meta_blocks=1 -L tmp /dev/${tmp_device}
+		mkfs.ext4 -O ^has_journal,sparse_super2 -G 8 -E packed_meta_blocks=1 -m 0 -L tmp /dev/${tmp_device}
 	else
-		mkfs.ext4 -O ^has_journal -G 16 -E packed_meta_blocks=1 -s 1024 -L tmp /dev/${tmp_device}
+		mkfs.ext4 -O ^has_journal,sparse_super2 -G 8 -E packed_meta_blocks=1 -s 1024 -m 0 -L tmp /dev/${tmp_device}
 	fi
 
 	mount -o nosuid,nodev,discard /dev/${tmp_device} /tmp
