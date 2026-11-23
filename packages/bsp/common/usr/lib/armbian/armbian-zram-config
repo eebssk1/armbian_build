@@ -46,21 +46,56 @@ activate_zram() {
 	module_args="$(modinfo zram | awk -F" " '/num_devices/ {print $2}' | cut -f1 -d:)"
 	[[ -n ${module_args} ]] && modprobe zram ${module_args}=$(( zram_devices + 2 )) || return
 
-	default_algo="$(cat /sys/block/zram0/comp_algorithm)"
-	if [ "x$default_algo" = "x" ]; then
-		default_algo=lzo
-	fi
-	swap_algo=${SWAP_ALGORITHM:=$default_algo}
-	# Expose 50% of real memory as swap space by default
-	zram_percent=${ZRAM_PERCENTAGE:=50}
 	mem_info=$(LC_ALL=C free -w 2>/dev/null | grep "^Mem" || LC_ALL=C free | grep "^Mem")
 	mem_info=$(echo $mem_info | awk '{print $2}')
 	memory_total=$(( mem_info * 1024 ))
-	mem_per_zram_device=$(( memory_total * zram_percent / zram_devices / 100 ))
 
-	# Limit memory available to zram to 50% by default
-	mem_limit_percent=${MEM_LIMIT_PERCENTAGE:=50}
-	mem_limit_per_zram_device=$(( memory_total * mem_limit_percent / zram_devices / 100 ))
+	# Swap size always follows reported RAM. Only auto selects an algorithm by RAM.
+	if [[ ${mem_info} -le $(( 640 * 1024 )) ]]; then
+		default_percent=300 auto_algo=zstd
+	elif [[ ${mem_info} -le $(( 1280 * 1024 )) ]]; then
+		default_percent=200 auto_algo=zstd
+	elif [[ ${mem_info} -le $(( 2560 * 1024 )) ]]; then
+		default_percent=100 auto_algo=zstd
+	else
+		default_percent=50 auto_algo=lzo
+	fi
+	zram_percent=${ZRAM_PERCENTAGE:=${default_percent}}
+	mem_per_zram_device=$(( memory_total * zram_percent / zram_devices / 100 ))
+}
+
+# Read the active algorithm and resolve the swap policy for this device.
+select_swap_algorithm() {
+	local attr=$1 algo requested match= rle=
+	local -a algorithms
+	active_algo=
+	swap_algo=
+	IFS=$' \t' read -ra algorithms 2>/dev/null < "$attr" || return 0
+	case ${SWAP_ALGORITHM:-kernel_default} in
+		kernel_default) requested= ;;
+		auto) requested=$auto_algo ;;
+		*) requested=$SWAP_ALGORITHM ;;
+	esac
+	for algo in "${algorithms[@]}"; do
+		if [[ $algo == \[*\] ]]; then
+			algo=${algo:1:-1}
+			active_algo=$algo
+		elif (( ${#algorithms[@]} == 1 )); then
+			active_algo=$algo
+		fi
+		[[ $algo == "$requested" ]] && match=$algo
+		[[ $algo == lzo-rle ]] && rle=$algo
+	done
+	if [[ $requested == lzo && ( $SWAP_ALGORITHM == auto || -z $match ) ]]; then
+		match=${rle:-$match}
+	fi
+	swap_algo=${match:-$active_algo}
+}
+
+apply_swap_algorithm() {
+	if [[ $swap_algo != "$active_algo" ]] && ! printf '%s\n' "$swap_algo" > "$1"; then
+		swap_algo=$active_algo
+	fi
 }
 
 activate_zram_swap() {
@@ -79,13 +114,18 @@ activate_zram_swap() {
 	for (( i=1; i<=zram_devices; i++ )); do
 		swap_device=$(zramctl -f |sed 's/\/dev\///')
 		[[ ! ${swap_device} =~ ^zram ]] && printf "\n### No more available zram devices (%s)\n" "${swap_device}" >> ${Log} && exit 1;
-		if [ -f /sys/block/${swap_device}/comp_algorithm ]; then
-			# set compression algorithm, if defined as lzo choose lzo-rle if available
-			# https://www.phoronix.com/scan.php?page=news_item&px=ZRAM-Linux-5.1-Better-Perform
-			grep -q 'lzo-rle' /sys/block/${swap_device}/comp_algorithm && \
-				[[ "X${swap_algo}" = "Xlzo" ]] && swap_algo="lzo-rle"
-			echo ${swap_algo} >/sys/block/${swap_device}/comp_algorithm 2>/dev/null
+		select_swap_algorithm "/sys/block/${swap_device}/comp_algorithm"
+		apply_swap_algorithm "/sys/block/${swap_device}/comp_algorithm"
+		# Estimate 3:1 for zstd and 2.5:1 otherwise. Clamp only the default.
+		if [[ $swap_algo == zstd ]]; then
+			default_limit=$(( (zram_percent + 2) / 3 ))
+		else
+			default_limit=$(( (zram_percent * 2 + 4) / 5 ))
 		fi
+		(( default_limit < 50 )) && default_limit=50
+		(( default_limit > 100 )) && default_limit=100
+		mem_limit_percent=${MEM_LIMIT_PERCENTAGE:-${default_limit}}
+		mem_limit_per_zram_device=$(( memory_total * mem_limit_percent / zram_devices / 100 ))
 		if [ "X${ZRAM_BACKING_DEV}" != "X" ]; then
 			echo ${ZRAM_BACKING_DEV} >/sys/block/${swap_device}/backing_dev
 		fi
@@ -119,21 +159,23 @@ activate_ramlog_partition() {
 	ramlogsize=$(awk -F"=" '/^SIZE/ {print $2}' /etc/default/armbian-ramlog)
 	disksize=$(sed -e 's/M$/*1048576/' -e 's/K$/*1024/' <<<${ramlogsize:=50M} | bc)
 
-	# choose RAMLOG_ALGORITHM if defined in /etc/default/armbian-zram-config
-	# otherwise try to choose most efficient compression scheme available.
+	# Save the swap selection for the retry before applying a RAM log override.
 	# See https://patchwork.kernel.org/patch/9918897/
+	select_swap_algorithm "/sys/block/${log_device}/comp_algorithm"
 	if [ "X${RAMLOG_ALGORITHM}" = "Xauto" ]; then
 		for algo in lz4 lz4hc quicklz zlib brotli zstd ; do
 			echo ${algo} >/sys/block/${log_device}/comp_algorithm 2>/dev/null
 		done
+	elif [[ -n $RAMLOG_ALGORITHM ]]; then
+		echo "$RAMLOG_ALGORITHM" >/sys/block/${log_device}/comp_algorithm 2>/dev/null
 	else
-		echo ${RAMLOG_ALGORITHM:-$swap_algo} >/sys/block/${log_device}/comp_algorithm 2>/dev/null
+		apply_swap_algorithm "/sys/block/${log_device}/comp_algorithm"
 	fi
 	echo -n ${disksize} > /sys/block/${log_device}/disksize
 
-	# if it fails, select $swap_algo. Workaround for some older kernels
+	# Retry with the swap policy on older kernels.
 	if [[ $? == 1 ]]; then
-		echo ${swap_algo} > /sys/block/${log_device}/comp_algorithm 2>/dev/null
+		[[ -n $swap_algo ]] && echo "$swap_algo" > /sys/block/${log_device}/comp_algorithm 2>/dev/null
 		echo -n ${disksize} > /sys/block/${log_device}/disksize
 	fi
 
@@ -155,7 +197,8 @@ activate_compressed_tmp() {
 
 	if [[ -f /sys/block/${tmp_device}/comp_algorithm ]]; then
 		if [ "X${TMP_ALGORITHM}" = "X" ]; then
-			echo ${swap_algo} >/sys/block/${tmp_device}/comp_algorithm 2>/dev/null
+			select_swap_algorithm "/sys/block/${tmp_device}/comp_algorithm"
+			apply_swap_algorithm "/sys/block/${tmp_device}/comp_algorithm"
 		else
 			echo ${TMP_ALGORITHM} >/sys/block/${tmp_device}/comp_algorithm 2>/dev/null
 		fi

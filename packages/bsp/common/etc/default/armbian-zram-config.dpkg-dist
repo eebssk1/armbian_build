@@ -9,30 +9,32 @@ ENABLED=true
 # percentage of zram used as swap compared to physically available DRAM.
 # Huge overcommitment (300) is possible and sometimes desirable. See
 # https://forum.armbian.com/topic/5565-zram-vs-swap/?do=findComment&comment=61082
-# and don't forget to adjust $MEM_LIMIT_PERCENTAGE below too.
+# The default MEM_LIMIT_PERCENTAGE below follows this value.
+# Default by reported RAM: 300% through 640 MiB, 200% through 1280 MiB, 100% through 2560 MiB, 50% above.
 # ZRAM_PERCENTAGE=50
 
 # percentage of DRAM available to zram. If this amount is exceeded the zram
-# devices used for swap simply behave as if the device is full. You need to
-# adjust/increase this value only if you want to work with massive memory
-# overcommitment (ZRAM_PERCENTAGE exceeding 150 for example)
+# devices used for swap simply behave as if the device is full.
+# Default: estimate 3:1 for active zstd, 2.5:1 otherwise. Limit the default to 50-100%.
 # MEM_LIMIT_PERCENTAGE=50
 
 # create how many zram devices max for swap
 # ZRAM_MAX_DEVICES=4
 
-# Which algorithm for zram based swapping. Seems lzo is best choice on ARM:
-# https://forum.armbian.com/topic/8161-swap-on-sbc/?do=findComment&comment=61668
-# SWAP_ALGORITHM=kernel_default|lzo
+# Unset, empty or kernel_default: keep the active kernel algorithm.
+# auto: request zstd through 2560 MiB, then lzo (prefer lzo-rle if available).
+# An explicit name selects an exact match. If lzo is unavailable, try lzo-rle.
+# Keep the active algorithm if no match exists or the write fails.
+# SWAP_ALGORITHM=kernel_default
 
 # Swap priority for zram devices (higher = preferred over other swap)
 # SWAP_PRIORITY=5
 
-# Which algorithm to choose for zram based ramlog partition
-# RAMLOG_ALGORITHM=SWAP_ALGORITHM
+# RAM log uses the swap policy unless overridden. Use auto to probe RAM log algorithms.
+# RAMLOG_ALGORITHM=auto
 
-# Which algorithm to choose for zram based /tmp
-# TMP_ALGORITHM=SWAP_ALGORITHM
+# Compressed /tmp uses the swap policy unless overridden.
+# TMP_ALGORITHM=lz4
 
 # Size for zram based /tmp, total memory / 2 by default
 # TMP_SIZE=500M
