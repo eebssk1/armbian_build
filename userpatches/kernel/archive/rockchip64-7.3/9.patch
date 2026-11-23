@@ -1,5 +1,4 @@
 diff --git a/Makefile b/Makefile
-index 7c855e6fe544..8577caca06ed 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -1026,7 +1026,7 @@
@@ -11,7 +10,7 @@ index 7c855e6fe544..8577caca06ed 100644
  endif
  
  ifdef CONFIG_FUNCTION_TRACER
-@@ -1143,13 +1143,22 @@
+@@ -1143,13 +1143,16 @@
  export CC_FLAGS_NO_FPU
  
  ifneq ($(CONFIG_FUNCTION_ALIGNMENT),0)
@@ -23,16 +22,10 @@ index 7c855e6fe544..8577caca06ed 100644
 -else
 -KBUILD_CFLAGS += -falign-functions=$(CONFIG_FUNCTION_ALIGNMENT)
 +ifeq ($(CONFIG_DEBUG_FORCE_FUNCTION_ALIGN_32B_SOFT),y)
-+CONFIG_FUNCTION_ALIGNMENT = 24
++KBUILD_CFLAGS += $(call cc-option,-falign-functions=32:19:16:12,-falign-functions=$(CONFIG_FUNCTION_ALIGNMENT))
++else
++KBUILD_CFLAGS += -falign-functions=$(CONFIG_FUNCTION_ALIGNMENT)
 +endif
-+REAL_FUNCTION_ALIGNMENT = $(CONFIG_FUNCTION_ALIGNMENT)
-+ifeq ($(REAL_FUNCTION_ALIGNMENT), 24)
-+REAL_FUNCTION_ALIGNMENT = 32:15:16:10
-+endif
-+ifeq ($(call cc-option,-falign-functions=$(REAL_FUNCTION_ALIGNMENT)),)
-+REAL_FUNCTION_ALIGNMENT = $(CONFIG_FUNCTION_ALIGNMENT)
-+endif
-+KBUILD_CFLAGS += -falign-functions=$(REAL_FUNCTION_ALIGNMENT)
 +ifeq ($(shell expr $(CONFIG_FUNCTION_ALIGNMENT) \> 7), 1)
 +KBUILD_CFLAGS += $(call cc-option, -fmin-function-alignment=8)
 +endif

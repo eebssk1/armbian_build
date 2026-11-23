@@ -1,5 +1,5 @@
---- a/net/ipv4/tcp_ipv4.c	2026-06-19 06:43:47.621409544 +0000
-+++ b/net/ipv4/tcp_ipv4.c	2026-06-19 07:10:32.148444865 +0000
+--- a/net/ipv4/tcp_ipv4.c
++++ b/net/ipv4/tcp_ipv4.c
 @@ -3432,7 +3432,7 @@
  
  	net->ipv4.tcp_death_row.hashinfo = hinfo;
@@ -44,16 +44,54 @@
  	if (net != &init_net) {
  		memcpy(net->ipv4.sysctl_tcp_rmem,
  		       init_net.ipv4.sysctl_tcp_rmem,
-@@ -3508,9 +3509,9 @@
+@@ -3508,10 +3509,10 @@
  		       init_net.ipv4.sysctl_tcp_wmem,
  		       sizeof(init_net.ipv4.sysctl_tcp_wmem));
  	}
 -	net->ipv4.sysctl_tcp_comp_sack_delay_ns = NSEC_PER_MSEC;
 -	net->ipv4.sysctl_tcp_comp_sack_slack_ns = 10 * NSEC_PER_USEC;
 -	net->ipv4.sysctl_tcp_comp_sack_nr = 44;
+-	net->ipv4.sysctl_tcp_comp_sack_rtt_percent = 33;
 +	net->ipv4.sysctl_tcp_comp_sack_delay_ns = 13 * NSEC_PER_MSEC / 10;
-+	net->ipv4.sysctl_tcp_comp_sack_slack_ns = 122 * NSEC_PER_USEC;
++	net->ipv4.sysctl_tcp_comp_sack_slack_ns = 25 * NSEC_PER_USEC;
 +	net->ipv4.sysctl_tcp_comp_sack_nr = 35;
- 	net->ipv4.sysctl_tcp_comp_sack_rtt_percent = 33;
++	net->ipv4.sysctl_tcp_comp_sack_rtt_percent = 18;
  	net->ipv4.sysctl_tcp_backlog_ack_defer = 1;
  	net->ipv4.sysctl_tcp_fastopen = TFO_CLIENT_ENABLE;
+ 	net->ipv4.sysctl_tcp_fastopen_blackhole_timeout = 0;
+--- a/Documentation/networking/ip-sysctl.rst
++++ b/Documentation/networking/ip-sysctl.rst
+@@ -892,15 +892,14 @@
+ 
+ 	Possible values : 1 - 1000
+ 
+-	Default : 33 %
++	Default : 18 %
+ 
+ tcp_comp_sack_delay_ns - LONG INTEGER
+ 	TCP tries to reduce number of SACK sent, using a timer based
+ 	on tcp_comp_sack_rtt_percent of SRTT, capped by this sysctl
+ 	in nano seconds.
+-	The default is 1ms, based on TSO autosizing period.
+ 
+-	Default : 1,000,000 ns (1 ms)
++	Default : 1,300,000 ns (1.3 ms)
+ 
+ tcp_comp_sack_slack_ns - LONG INTEGER
+ 	This sysctl control the slack used when arming the
+@@ -909,13 +908,13 @@
+ 	opportunistic reduction of timer interrupts.
+ 	Too big values might reduce goodput.
+ 
+-	Default : 10,000 ns (10 us)
++	Default : 25,000 ns (25 us)
+ 
+ tcp_comp_sack_nr - INTEGER
+ 	Max number of SACK that can be compressed.
+ 	Using 0 disables SACK compression.
+ 
+-	Default : 44
++	Default : 35
+ 
+ tcp_backlog_ack_defer - BOOLEAN
+ 	If enabled, user thread processing socket backlog tries sending

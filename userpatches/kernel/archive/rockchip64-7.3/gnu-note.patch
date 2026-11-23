@@ -1,0 +1,20 @@
+--- a/drivers/firmware/efi/libstub/Makefile
++++ b/drivers/firmware/efi/libstub/Makefile
+@@ -110,7 +110,7 @@
+ # .note.gnu.property for code-less object files (like lib/ctype.c),
+ # so work around this by explicitly removing the unwanted section.
+ # https://llvm.org/pr46480
+-STUBCOPY_FLAGS-y		+= --remove-section=.note.gnu.property
++STUBCOPY_FLAGS-y		+= --remove-section=.note.gnu.property --remove-section=.gnu.build.attributes
+ 
+ STUBCOPY_RELOC-$(CONFIG_X86_32)	:= R_386_32
+ STUBCOPY_RELOC-$(CONFIG_X86_64)	:= R_X86_64_64
+@@ -166,7 +166,7 @@
+ #
+ quiet_cmd_stubcopy = STUBCPY $@
+       cmd_stubcopy =							\
+-	$(STRIP) --strip-debug -o $@ $<;				\
++	$(STRIP) -R .gnu.build.attributes --strip-debug -o $@ $<;				\
+ 	if $(OBJDUMP) -r $@ | grep $(STUBCOPY_RELOC-y); then		\
+ 		echo "$@: absolute symbol references not allowed in the EFI stub" >&2; \
+ 		/bin/false;						\

@@ -1,0 +1,11 @@
+--- a/drivers/md/dm-cache-target.c
++++ b/drivers/md/dm-cache-target.c
+@@ -2548,7 +2548,7 @@
+ 	}
+ 
+ 	cache->wq = alloc_workqueue("dm-" DM_MSG_PREFIX,
+-				    WQ_MEM_RECLAIM | WQ_PERCPU, 0);
++				    WQ_MEM_RECLAIM | WQ_UNBOUND, 0);
+ 	if (!cache->wq) {
+ 		*error = "could not create workqueue for metadata object";
+ 		goto bad;
